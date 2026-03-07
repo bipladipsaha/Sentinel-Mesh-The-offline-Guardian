@@ -3,6 +3,8 @@
 #include <TinyGPS++.h>
 #include <HardwareSerial.h>
 #include <Wire.h>
+#include <SPI.h>
+#include <LoRa.h>
 
 // ================= WIFI =================
 const char* ssid = "iqoo1234";
@@ -11,7 +13,7 @@ const char* password = "hello123";
 String firebaseURL = "https://esp32iotproject-e9fe1-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 // ================= TELEGRAM =================
-String botToken = "8687058189:AAHyYqhE2UAjRLCQLPikGnOt88Uun6rJVVg"; 
+String botToken = "8687058189:AAHyYqhE2UAjRLCQLPikGnOt88Uun6rJVVg";
 
 String chatIDs[] = {
   "1206334941",      // Your ID
@@ -25,6 +27,11 @@ const int totalContacts = 4;
 // ================= GPS =================
 TinyGPSPlus gps;
 HardwareSerial gpsSerial(2);
+
+// ================= LORA =================
+#define LORA_SS 5
+#define LORA_RST 14
+#define LORA_DIO0 26
 
 // ================= MPU6500 =================
 #define MPU_ADDR 0x68
@@ -45,7 +52,7 @@ float lat = 0.0;
 float lng = 0.0;
 
 // ================= BUTTON =================
-#define SOS_BUTTON 14
+#define SOS_BUTTON 27
 
 bool lastButtonState = HIGH;
 unsigned long pressStartTime = 0;
@@ -69,6 +76,7 @@ void sendIdleStatus();
 void sendTelegramAlert(String message);
 void sendSOSFlag();
 void readMPU();
+void sendLoRaSOS(float lat, float lng);
 
 void setup() {
 
@@ -103,6 +111,17 @@ void setup() {
   Wire.endTransmission();
 
   Serial.println("MPU6500 Ready");
+
+  // Initialize LoRa
+  SPI.begin(18, 19, 23, 5);
+  LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
+
+  if (!LoRa.begin(433E6)) {
+    Serial.println("LoRa init failed!");
+    while (true);
+  }
+
+  Serial.println("LoRa Ready");
 }
 
 void loop() {
@@ -160,6 +179,7 @@ void loop() {
 
         trackingActive = true;
         sendTelegramAlert("🚨 FALL DETECTED");
+        sendLoRaSOS(lat, lng);
 
         impactDetected = false;
         stillStart = 0;
@@ -243,6 +263,7 @@ void loop() {
       }
 
       sendTelegramAlert(message);
+      sendLoRaSOS(lat, lng);
     }
 
     clickCount = 0;
@@ -330,6 +351,19 @@ void readMPU() {
     gy = gy_raw / 131.0;
     gz = gz_raw / 131.0;
   }
+}
+
+// ================= LORA SOS =================
+void sendLoRaSOS(float lat, float lng) {
+  Serial.println("Preparing LoRa packet...");
+
+  String packet = "SOS," + String(lat, 6) + "," + String(lng, 6);
+
+  LoRa.beginPacket();
+  LoRa.print(packet);
+  LoRa.endPacket();
+
+  Serial.println("LoRa TX → " + packet);
 }
 
 // ================= TELEGRAM =================
