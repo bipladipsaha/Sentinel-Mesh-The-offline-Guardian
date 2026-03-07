@@ -1,5 +1,3 @@
-
-
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <TinyGPS++.h>
