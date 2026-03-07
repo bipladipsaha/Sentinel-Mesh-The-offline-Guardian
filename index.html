@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Sentinel-Mesh | Women Safety Monitoring Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sentinel-Mesh — Real-time IoT Women Safety Monitoring System Dashboard">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        :root {
+            --bg-page: #F5F6FA;
+            --bg-card: #FFFFFF;
+            --bg-header: #FFFFFF;
+            --bg-sidebar: #F9FAFB;
+            --border: #E2E5ED;
+            --border-light: #EDF0F5;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1);
+            --blue: #3B82F6;
+            --blue-light: #EFF6FF;
+            --blue-border: #BFDBFE;
+            --green: #16A34A;
+            --green-light: #F0FDF4;
+            --green-border: #BBF7D0;
+            --red: #DC2626;
+            --red-light: #FEF2F2;
+            --red-border: #FECACA;
+            --amber: #D97706;
+            --amber-light: #FFFBEB;
+            --text-primary: #1E293B;
+            --text-secondary: #475569;
+            --text-muted: #94A3B8;
+            --font: 'Inter', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --radius: 10px;
+            --radius-sm: 6px;
+            --radius-lg: 14px;
+        }
+
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg-page);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* HEADER */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+            height: 60px;
+            background: var(--bg-header);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-sm);
+            transition: background 0.4s ease, border-color 0.4s ease;
+        }
+
+        .header.emergency {
+            background: #FEF2F2;
+            border-bottom-color: #FECACA;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, #3B82F6, #2563EB);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 20px;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+        }
+
+        .header-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .header-title .brand {
+            font-weight: 800;
+            color: var(--blue);
+        }
+
+        .header-title .sub {
+            font-weight: 400;
+            color: var(--text-secondary);
+            font-size: 13px;
+            margin-left: 4px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .clock {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--text-secondary);
+            letter-spacing: 0.3px;
+        }
+
+        .system-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 5px 14px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .system-badge.online {
+            color: var(--green);
+            background: var(--green-light);
+            border: 1px solid var(--green-border);
+        }
+
+        .system-badge.offline {
+            color: var(--red);
+            background: var(--red-light);
+            border: 1px solid var(--red-border);
+        }
+
+        .badge-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+        }
+
+        .system-badge.online .badge-dot {
+            background: var(--green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        /* ALERT BANNER */
+        .alert-banner {
+            display: none;
+            padding: 10px 28px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            background: var(--red-light);
+            color: var(--red);
+            border-bottom: 1px solid var(--red-border);
+            letter-spacing: 0.5px;
+            animation: bannerFade 2s ease-in-out infinite;
+        }
+
+        .alert-banner.visible {
+            display: block;
+        }
+
+        @keyframes bannerFade {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        /* MAIN LAYOUT */
+        .main-content {
+            padding: 24px 28px;
+            overflow-y: auto;
+            height: calc(100vh - 60px);
+        }
+
+        .main-content.with-banner {
+            height: calc(100vh - 60px - 42px);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 24px;
+            max-width: 1440px;
+            margin: 0 auto;
+        }
+
+        /* CARDS */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card.alert-active {
+            border-color: var(--red-border);
+            box-shadow: 0 0 0 1px var(--red-border), var(--shadow-md);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .card-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+        }
+
+        .card-icon {
+            font-size: 16px;
+        }
+
+        /* STATUS CHIP */
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            padding: 4px 14px;
+            border-radius: 20px;
+        }
+
+        .status-chip.idle {
+            color: var(--green);
+            background: var(--green-light);
+            border: 1px solid var(--green-border);
+        }
+
+        .status-chip.active {
+            color: var(--red);
+            background: var(--red-light);
+            border: 1px solid var(--red-border);
+            animation: chipBlink 2s infinite;
+        }
+
+        @keyframes chipBlink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        .chip-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+        }
+
+        .status-chip.idle .chip-dot {
+            background: var(--green);
+        }
+
+        .status-chip.active .chip-dot {
+            background: var(--red);
+        }
+
+        /* INFO ROWS */
+        .info-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .info-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-label .icon {
+            font-size: 16px;
+            opacity: 0.8;
+        }
+
+        .info-value {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        /* PROGRESS BAR (battery) */
+        .progress-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .progress-bar {
+            width: 100px;
+            height: 8px;
+            background: #E2E8F0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.4s ease;
+            background: var(--green);
+        }
+
+        .progress-fill.medium {
+            background: var(--amber);
+        }
+
+        .progress-fill.low {
+            background: var(--red);
+        }
+
+        /* WIFI BARS */
+        .wifi-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .wifi-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 16px;
+        }
+
+        .wifi-bars .bar {
+            width: 4px;
+            background: #E2E8F0;
+            border-radius: 1px;
+            transition: background 0.3s;
+        }
+
+        .wifi-bars .bar:nth-child(1) {
+            height: 4px;
+        }
+
+        .wifi-bars .bar:nth-child(2) {
+            height: 8px;
+        }
+
+        .wifi-bars .bar:nth-child(3) {
+            height: 12px;
+        }
+
+        .wifi-bars .bar:nth-child(4) {
+            height: 16px;
+        }
+
+        .wifi-bars .bar.ok {
+            background: var(--green);
+        }
+
+        .wifi-bars .bar.warn {
+            background: var(--amber);
+        }
+
+        .wifi-bars .bar.bad {
+            background: var(--red);
+        }
+
+        /* GPS TAG */
+        .gps-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-family: var(--font-mono);
+            letter-spacing: 0.5px;
+        }
+
+        .gps-tag.live {
+            color: var(--green);
+            background: var(--green-light);
+            border: 1px solid var(--green-border);
+        }
+
+        .gps-tag.last-known {
+            color: var(--amber);
+            background: var(--amber-light);
+            border: 1px solid #FDE68A;
+        }
+
+        .gps-tag.no-signal {
+            color: var(--red);
+            background: var(--red-light);
+            border: 1px solid var(--red-border);
+        }
+
+        /* MAP CARD */
+        .map-card {
+            padding: 0;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .map-card .card-header {
+            padding: 16px 24px 14px;
+            margin-bottom: 0;
+        }
+
+        #mainMap {
+            height: 400px;
+            width: 100%;
+            z-index: 1;
+        }
+
+        .map-coords {
+            padding: 12px 24px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: var(--bg-sidebar);
+            border-top: 1px solid var(--border-light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* EMERGENCY TIMER */
+        .emergency-timer {
+            display: none;
+        }
+
+        .emergency-timer.visible {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--red);
+        }
+
+        /* EXTRA FEATURES BAR */
+        .actions-bar {
+            display: flex;
+            gap: 10px;
+            margin-top: 24px;
+            flex-wrap: wrap;
+            max-width: 1440px;
+            margin: 24px auto 0;
+        }
+
+        .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: var(--font);
+        }
+
+        .action-btn:hover {
+            background: var(--blue-light);
+            color: var(--blue);
+            border-color: var(--blue-border);
+        }
+
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* INCIDENT HISTORY */
+        .incidents-panel {
+            max-width: 1440px;
+            margin: 20px auto 0;
+            display: none;
+        }
+
+        .incidents-panel.visible {
+            display: block;
+        }
+
+        .incident-list {
+            list-style: none;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .incident-list li {
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border-light);
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .incident-list li:last-child {
+            border-bottom: none;
+        }
+
+        .incident-status {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .incident-status.emergency {
+            color: var(--red);
+        }
+
+        .incident-status.normal {
+            color: var(--green);
+        }
+
+        .incident-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        /* TRACKING VIEW */
+        .tracking-view {
+            display: none;
+            height: calc(100vh - 60px);
+            flex-direction: column;
+        }
+
+        .tracking-view.visible {
+            display: flex;
+        }
+
+        .tracking-banner {
+            padding: 10px 24px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-align: center;
+            transition: all 0.4s ease;
+        }
+
+        .tracking-banner.banner-active {
+            background: var(--red-light);
+            color: var(--red);
+            border-bottom: 1px solid var(--red-border);
+        }
+
+        .tracking-banner.banner-normal {
+            background: var(--green-light);
+            color: var(--green);
+            border-bottom: 1px solid var(--green-border);
+        }
+
+        .tracking-layout {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .track-sidebar {
+            width: 280px;
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+        }
+
+        .sidebar-title {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            padding: 4px 0 8px;
+        }
+
+        .sidebar-card {
+            background: var(--bg-sidebar);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            transition: all 0.2s;
+        }
+
+        .sidebar-card-label {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .sidebar-card-value {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+        }
+
+        .sidebar-card-value.small {
+            font-size: 12px;
+        }
+
+        .coord-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .coord-row .sidebar-card {
+            flex: 1;
+        }
+
+        .track-map-area {
+            flex: 1;
+            position: relative;
+        }
+
+        #trackMap {
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .track-map-hud {
+            position: absolute;
+            z-index: 10;
+            bottom: 12px;
+            left: 60px;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(6px);
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+        }
+
+        .back-btn {
+            position: absolute;
+            z-index: 10;
+            top: 12px;
+            left: 60px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 8px 16px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-family: var(--font);
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            background: var(--blue-light);
+            color: var(--blue);
+        }
+
+        /* PULSE MARKER */
+        .pulse-marker {
+            position: relative;
+            width: 16px;
+            height: 16px;
+        }
+
+        .pulse-marker .pin {
+            width: 14px;
+            height: 14px;
+            background: var(--red);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            position: absolute;
+            top: 1px;
+            left: 1px;
+            z-index: 3;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .pulse-marker .ring {
+            position: absolute;
+            width: 36px;
+            height: 36px;
+            border: 2px solid var(--red);
+            border-radius: 50%;
+            top: -10px;
+            left: -10px;
+            opacity: 0;
+            animation: markerPulse 2s ease-out infinite;
+        }
+
+        .pulse-marker.idle .pin {
+            background: var(--green);
+        }
+
+        .pulse-marker.idle .ring {
+            border-color: var(--green);
+            animation: none;
+            opacity: 0;
+        }
+
+        @keyframes markerPulse {
+            0% {
+                transform: scale(0.5);
+                opacity: 0.8;
+            }
+
+            100% {
+                transform: scale(1.8);
+                opacity: 0;
+            }
+        }
+
+        /* LIVE TRACKING BUTTON */
+        .live-track-btn {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: var(--blue);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius);
+            font-family: var(--font);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .live-track-btn:hover {
+            background: #2563EB;
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+            transform: translateY(-1px);
+        }
+
+        /* EMERGENCY MODAL */
+        .emergency-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 999;
+            background: rgba(220, 38, 38, 0.12);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .emergency-modal-overlay.visible {
+            display: flex;
+        }
+
+        .emergency-modal {
+            background: #fff;
+            width: 440px;
+            max-width: 92vw;
+            border-radius: var(--radius-lg);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px var(--red-border);
+            overflow: hidden;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+
+        .emergency-modal-overlay.visible .emergency-modal {
+            transform: scale(1);
+        }
+
+        .emergency-modal-header {
+            background: var(--red-light);
+            border-bottom: 1px solid var(--red-border);
+            padding: 24px 28px 20px;
+            text-align: center;
+        }
+
+        .emergency-modal-header .alert-icon {
+            font-size: 36px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .emergency-modal-header h2 {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--red);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin: 0;
+        }
+
+        .emergency-modal-header p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .emergency-modal-body {
+            padding: 24px 28px;
+        }
+
+        .modal-detail-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .modal-detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .modal-detail-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+        }
+
+        .modal-detail-value {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .modal-detail-value.sos {
+            color: var(--red);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-family: var(--font);
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .modal-btn-track {
+            background: var(--red);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(220, 38, 38, 0.25);
+        }
+
+        .modal-btn-track:hover {
+            background: #B91C1C;
+            box-shadow: 0 6px 20px rgba(220, 38, 38, 0.35);
+        }
+
+        .modal-btn-ack {
+            background: var(--bg-sidebar);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .modal-btn-ack:hover {
+            background: var(--border-light);
+            color: var(--text-primary);
+        }
+
+        /* RESPONSIVE */
+        @media(max-width:1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            #mainMap {
+                height: 350px;
+            }
+
+            .track-sidebar {
+                width: 240px;
+            }
+        }
+
+        @media(max-width:768px) {
+            .header {
+                padding: 0 16px;
+            }
+
+            .header-title .sub {
+                display: none;
+            }
+
+            .main-content {
+                padding: 16px;
+            }
+
+            .dashboard-grid {
+                gap: 16px;
+            }
+
+            .track-sidebar {
+                display: none;
+            }
+
+            .actions-bar {
+                padding: 0 16px;
+            }
+
+            .demo-controls {
+                bottom: 8px;
+                right: 8px;
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- HEADER -->
+    <header class="header" id="mainHeader">
+        <div class="header-left">
+            <div class="logo-icon">🛡</div>
+            <div class="header-title">
+                <span class="brand">Sentinel-Mesh</span>
+                <span class="sub">— Women Safety Monitoring Dashboard</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <span class="clock" id="clock">--:--:-- --</span>
+            <div class="system-badge online" id="systemBadge">
+                <span class="badge-dot"></span> ONLINE
+            </div>
+        </div>
+    </header>
+
+    <!-- ALERT BANNER -->
+    <div class="alert-banner" id="alertBanner">🚨 Emergency Active — Immediate Attention Required</div>
+
+    <!-- MAIN DASHBOARD VIEW -->
+    <main class="main-content" id="dashboardView">
+        <div class="dashboard-grid">
+            <!-- LEFT COLUMN -->
+            <div class="left-col">
+                <!-- Device Information Card -->
+                <div class="card" id="deviceCard" style="margin-bottom:24px;">
+                    <div class="card-header">
+                        <span class="card-title">📱 Device Information</span>
+                        <span class="card-icon" id="deviceCardIcon"></span>
+                    </div>
+                    <div class="info-rows">
+                        <div class="info-row">
+                            <span class="info-label"><span class="icon">🔌</span> Device ID</span>
+                            <span class="info-value">DEV-001</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><span class="icon">📡</span> Status</span>
+                            <div class="status-chip idle" id="dashStatusChip">
+                                <span class="chip-dot"></span>
+                                <span id="dashStatusText">IDLE</span>
+                            </div>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><span class="icon">🕐</span> Last Update</span>
+                            <span class="info-value" id="dashLastUpdate">—</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><span class="icon">⏱</span> Emergency Duration</span>
+                            <div class="emergency-timer" id="emergencyTimer">
+                                <span id="emergencyDuration">00:00</span>
+                            </div>
+                            <span class="info-value" id="noDuration" style="color:var(--text-muted);">N/A</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- System Health Card -->
+                <div class="card" id="healthCard">
+                    <div class="card-header">
+                        <span class="card-title">⚙ System Health</span>
+                    </div>
+                    <div class="info-rows">
+                        <div class="info-row">
+                            <span class="info-label"><span class="icon">🔋</span> Battery</span>
+                            <div class="progress-wrap">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="dashBatFill" style="width:0%"></div>
+                                </div>
+                                <span class="info-value" id="dashBatPct">—</span>
+                            </div>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><span class="icon">📶</span> WiFi Signal</span>
+                            <div class="wifi-wrap">
+                                <div class="wifi-bars" id="dashWifiBars"><span class="bar"></span><span
+                                        class="bar"></span><span class="bar"></span><span class="bar"></span></div>
+                                <span class="info-value" id="dashWifiVal">—</span>
+                            </div>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><span class="icon">📍</span> GPS Status</span>
+                            <span class="gps-tag live" id="dashGpsTag">● LIVE</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- RIGHT COLUMN: MAP -->
+            <div class="card map-card">
+                <div class="card-header">
+                    <span class="card-title">🗺 Location Map</span>
+                    <span class="gps-tag live" id="mapGpsTag">● GPS LIVE</span>
+                </div>
+                <div id="mainMap"></div>
+                <div class="map-coords">
+                    <span id="mapCoords">Lat: — | Lng: —</span>
+                    <span id="mapZoom">Zoom: 16</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ACTION BUTTONS -->
+        <div class="actions-bar">
+            <button class="action-btn" onclick="exportReport()">📄 Export Location Report</button>
+            <button class="action-btn" onclick="toggleIncidents()">📋 Incident History</button>
+            <button class="action-btn" onclick="printReport()">🖨 Print Emergency Report</button>
+            <select class="action-btn" id="deviceSelector" disabled>
+                <option>DEV-001</option>
+                <option disabled>DEV-002 (coming soon)</option>
+                <option disabled>DEV-003 (coming soon)</option>
+            </select>
+        </div>
+
+        <!-- INCIDENT HISTORY -->
+        <div class="card incidents-panel" id="incidentsPanel">
+            <div class="card-header">
+                <span class="card-title">📋 Incident History</span>
+                <span class="info-value" id="incidentCount" style="font-size:11px;color:var(--text-muted);">0
+                    events</span>
+            </div>
+            <ul class="incident-list" id="incidentList">
+                <li style="color:var(--text-muted); justify-content:center;">No incidents recorded yet</li>
+            </ul>
+        </div>
+    </main>
+
+    <!-- TRACKING VIEW -->
+    <div class="tracking-view" id="trackingView">
+        <div class="tracking-banner banner-normal" id="trackBanner">🟢 SYSTEM NORMAL — ALL CLEAR</div>
+        <div class="tracking-layout">
+            <aside class="track-sidebar">
+                <div class="sidebar-title">Device Status</div>
+                <div class="sidebar-card">
+                    <div class="sidebar-card-label">Status</div>
+                    <div class="status-chip idle" id="trackStatusChip"><span class="chip-dot"></span><span
+                            id="trackStatusText">IDLE</span></div>
+                </div>
+                <div class="sidebar-title" style="margin-top:8px;">Location</div>
+                <div class="coord-row">
+                    <div class="sidebar-card">
+                        <div class="sidebar-card-label">Latitude</div>
+                        <div class="sidebar-card-value small" id="trackLat">—</div>
+                    </div>
+                    <div class="sidebar-card">
+                        <div class="sidebar-card-label">Longitude</div>
+                        <div class="sidebar-card-value small" id="trackLng">—</div>
+                    </div>
+                </div>
+                <div class="sidebar-card">
+                    <div class="sidebar-card-label">GPS Status</div>
+                    <span class="gps-tag live" id="trackGpsTag">● LIVE</span>
+                </div>
+                <div class="sidebar-title" style="margin-top:8px;">Telemetry</div>
+                <div class="sidebar-card">
+                    <div class="sidebar-card-label">Battery</div>
+                    <div class="progress-wrap" style="margin-top:4px;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="trackBatFill" style="width:0%"></div>
+                        </div>
+                        <span class="sidebar-card-value small" id="trackBatPct">—</span>
+                    </div>
+                </div>
+                <div class="sidebar-card">
+                    <div class="sidebar-card-label">WiFi Signal</div>
+                    <div class="wifi-wrap" style="margin-top:4px;">
+                        <div class="wifi-bars" id="trackWifiBars"><span class="bar"></span><span
+                                class="bar"></span><span class="bar"></span><span class="bar"></span></div>
+                        <span class="sidebar-card-value small" id="trackWifiVal">—</span>
+                    </div>
+                </div>
+                <div class="sidebar-card">
+                    <div class="sidebar-card-label">Last Update</div>
+                    <div class="sidebar-card-value small" id="trackLastUpdate">—</div>
+                </div>
+            </aside>
+            <div class="track-map-area">
+                <button class="back-btn" onclick="backToMonitoring()">← Back to Dashboard</button>
+                <div id="trackMap"></div>
+                <div class="track-map-hud" id="trackHud">Lat: — | Lng: — | Updates: 0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LIVE TRACKING BUTTON -->
+    <button class="live-track-btn" onclick="enterTracking()">📍 Live Tracking</button>
+
+    <!-- EMERGENCY MODAL -->
+    <div class="emergency-modal-overlay" id="emergencyModal">
+        <div class="emergency-modal">
+            <div class="emergency-modal-header">
+                <span class="alert-icon">🚨</span>
+                <h2>Emergency Alert</h2>
+                <p>Immediate attention required</p>
+            </div>
+            <div class="emergency-modal-body">
+                <div class="modal-detail-row">
+                    <span class="modal-detail-label">Status</span>
+                    <span class="modal-detail-value sos">⚠ SOS ACTIVE</span>
+                </div>
+                <div class="modal-detail-row">
+                    <span class="modal-detail-label">Device</span>
+                    <span class="modal-detail-value" id="modalDevice">DEV-001</span>
+                </div>
+                <div class="modal-detail-row">
+                    <span class="modal-detail-label">Location</span>
+                    <span class="modal-detail-value" id="modalCoords">—</span>
+                </div>
+                <div class="modal-detail-row">
+                    <span class="modal-detail-label">GPS Status</span>
+                    <span class="modal-detail-value" id="modalGps">—</span>
+                </div>
+                <div class="modal-detail-row">
+                    <span class="modal-detail-label">Time</span>
+                    <span class="modal-detail-value" id="modalTime">—</span>
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-track" onclick="trackFromModal()">📍 Track Live</button>
+                    <button class="modal-btn modal-btn-ack" onclick="acknowledgeAlert()">✔ Acknowledge</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ══════════════════════════ STATE ══════════════════════════
+        let currentView = 'dashboard';
+        let mainMapObj, mainMarker;
+        let trackMapObj, trackMarker, trailLine, trailCoords = [];
+        let mainMapInit = false, trackMapInit = false;
+        let lastKnownLat = 22.5726, lastKnownLng = 88.3639, lastKnownStatus = 'IDLE';
+        let updateCounter = 0, initialLoad = true, emergencyStart = null, emergencyInterval = null;
+        let incidents = [];
+        let alertAcknowledged = false, modalShown = false;
+
+        // ══════════════════════════ CLOCK ══════════════════════════
+        function updateClock() {
+            const t = new Date().toLocaleTimeString('en-US', { hour12: true });
+            document.getElementById('clock').innerText = t;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // ══════════════════════════ MAPS ══════════════════════════
+        function initMainMap() {
+            mainMapObj = L.map('mainMap', { zoomControl: true }).setView([lastKnownLat, lastKnownLng], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap', maxZoom: 19
+            }).addTo(mainMapObj);
+            var icon = L.divIcon({ className: 'pulse-marker idle', html: '<div class="ring"></div><div class="pin"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
+            mainMarker = L.marker([lastKnownLat, lastKnownLng], { icon: icon }).addTo(mainMapObj);
+            mainMapObj.on('zoomend', function () { document.getElementById('mapZoom').innerText = 'Zoom: ' + mainMapObj.getZoom(); });
+            mainMapInit = true;
+            setTimeout(() => mainMapObj.invalidateSize(), 200);
+        }
+
+        function initTrackMap() {
+            trackMapObj = L.map('trackMap', { zoomControl: true }).setView([lastKnownLat, lastKnownLng], 17);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap', maxZoom: 19
+            }).addTo(trackMapObj);
+            var icon = L.divIcon({ className: 'pulse-marker', html: '<div class="ring"></div><div class="pin"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
+            trackMarker = L.marker([lastKnownLat, lastKnownLng], { icon: icon }).addTo(trackMapObj);
+            trailLine = L.polyline([], { color: '#DC2626', weight: 3, opacity: 0.6, dashArray: '6,8', smoothFactor: 1 }).addTo(trackMapObj);
+            trackMapInit = true;
+            setTimeout(() => trackMapObj.invalidateSize(), 200);
+        }
+
+        // ══════════════════════════ HELPERS ══════════════════════════
+        function updateWifiBars(id, rssi) {
+            const c = document.getElementById(id); if (!c) return;
+            const bars = c.querySelectorAll('.bar');
+            let level = rssi > -50 ? 4 : rssi > -65 ? 3 : rssi > -75 ? 2 : 1;
+            let cls = level >= 3 ? 'ok' : level === 2 ? 'warn' : 'bad';
+            bars.forEach((b, i) => { b.className = 'bar' + (i < level ? ' ' + cls : ''); });
+        }
+        function updateBattery(fillId, pctId, pct) {
+            const fill = document.getElementById(fillId), text = document.getElementById(pctId);
+            if (!fill || !text) return;
+            pct = Math.max(0, Math.min(100, pct));
+            fill.style.width = pct + '%';
+            fill.className = 'progress-fill' + (pct < 25 ? ' low' : pct < 50 ? ' medium' : '');
+            text.innerText = pct + '%';
+        }
+        function updateGpsTag(tagId, gpsLive, hasCoords) {
+            const tag = document.getElementById(tagId); if (!tag) return;
+            if (!hasCoords) { tag.className = 'gps-tag no-signal'; tag.innerText = '✕ NO SIGNAL'; }
+            else if (gpsLive) { tag.className = 'gps-tag live'; tag.innerText = '● LIVE'; }
+            else { tag.className = 'gps-tag last-known'; tag.innerText = '◐ LAST KNOWN'; }
+        }
+        function startEmergencyTimer() {
+            if (emergencyInterval) return;
+            emergencyStart = Date.now();
+            document.getElementById('emergencyTimer').classList.add('visible');
+            document.getElementById('noDuration').style.display = 'none';
+            emergencyInterval = setInterval(() => {
+                const s = Math.floor((Date.now() - emergencyStart) / 1000);
+                const m = Math.floor(s / 60), sec = s % 60;
+                document.getElementById('emergencyDuration').innerText = String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+            }, 1000);
+        }
+        function stopEmergencyTimer() {
+            if (emergencyInterval) { clearInterval(emergencyInterval); emergencyInterval = null; }
+            document.getElementById('emergencyTimer').classList.remove('visible');
+            document.getElementById('noDuration').style.display = '';
+            emergencyStart = null;
+        }
+        function addIncident(status, lat, lng, isNoSignal, time) {
+            const loc = isNoSignal ? 'NO GPS' : (lat.toFixed(4) + ', ' + lng.toFixed(4));
+            incidents.unshift({ status, loc, time });
+            const list = document.getElementById('incidentList');
+            const empty = list.querySelector('li[style]');
+            if (empty && incidents.length === 1) list.innerHTML = '';
+            const li = document.createElement('li');
+            li.innerHTML = '<span class="incident-status ' + (status === 'ACTIVE' ? 'emergency' : 'normal') + '">' + (status === 'ACTIVE' ? '🔴 EMERGENCY' : '🟢 NORMAL') + '</span><span class="incident-meta">' + time + ' • ' + loc + '</span>';
+            list.prepend(li);
+            if (list.children.length > 50) list.removeChild(list.lastChild);
+            document.getElementById('incidentCount').innerText = list.children.length + ' events';
+        }
+
+        // ══════════════════════════ PROCESS UPDATE ══════════════════════════
+        function processUpdate(data) {
+            const status = data.status || 'IDLE';
+            const gpsField = data.gps;
+            const gpsLive = data.gps_live;
+            const wifi = data.wifi;
+            const battery = data.battery;
+            const isNoSignal = (gpsField === 'NO_SIGNAL');
+            const hasCoords = !isNoSignal && data.lat !== undefined && data.lng !== undefined;
+            const lat = hasCoords ? data.lat : lastKnownLat;
+            const lng = hasCoords ? data.lng : lastKnownLng;
+            const now = new Date().toLocaleTimeString('en-US', { hour12: true });
+
+            if (hasCoords) { lastKnownLat = lat; lastKnownLng = lng; }
+            lastKnownStatus = status;
+            updateCounter++;
+
+            // ─── DASHBOARD VIEW ───
+            document.getElementById('dashLastUpdate').innerText = now;
+            const chip = document.getElementById('dashStatusChip');
+            const chipText = document.getElementById('dashStatusText');
+            const header = document.getElementById('mainHeader');
+            const banner = document.getElementById('alertBanner');
+            const devCard = document.getElementById('deviceCard');
+
+            if (status === 'ACTIVE') {
+                chip.className = 'status-chip active'; chipText.innerText = 'ACTIVE';
+                header.classList.add('emergency'); banner.classList.add('visible');
+                devCard.classList.add('alert-active');
+                document.getElementById('dashboardView').classList.add('with-banner');
+                startEmergencyTimer();
+                // Show emergency popup
+                if (!alertAcknowledged && !modalShown && !initialLoad) {
+                    showEmergencyPopup(lat, lng, hasCoords, isNoSignal, gpsLive);
+                }
+            } else {
+                chip.className = 'status-chip idle'; chipText.innerText = 'IDLE';
+                header.classList.remove('emergency'); banner.classList.remove('visible');
+                devCard.classList.remove('alert-active');
+                document.getElementById('dashboardView').classList.remove('with-banner');
+                stopEmergencyTimer();
+                // Reset alert state when back to IDLE
+                alertAcknowledged = false;
+                modalShown = false;
+                document.getElementById('emergencyModal').classList.remove('visible');
+            }
+
+            updateGpsTag('dashGpsTag', gpsLive, hasCoords);
+            updateGpsTag('mapGpsTag', gpsLive, hasCoords);
+            if (wifi !== undefined) { updateWifiBars('dashWifiBars', wifi); document.getElementById('dashWifiVal').innerText = wifi + ' dBm'; }
+            if (battery !== undefined) updateBattery('dashBatFill', 'dashBatPct', battery);
+
+            // Main map
+            if (mainMapObj && mainMarker && hasCoords) {
+                mainMarker.setLatLng([lat, lng]);
+                mainMapObj.setView([lat, lng]);
+                const el = mainMarker.getElement();
+                if (el) { const c = el.querySelector('.pulse-marker') || el; status === 'ACTIVE' ? c.classList.remove('idle') : c.classList.add('idle'); }
+            }
+            document.getElementById('mapCoords').innerText = hasCoords ? 'Lat: ' + lat.toFixed(6) + '  |  Lng: ' + lng.toFixed(6) : 'GPS — NO SIGNAL';
+
+            // ─── TRACKING VIEW ───
+            if (currentView === 'tracking' || trackMapInit) {
+                document.getElementById('trackLat').innerText = hasCoords ? lat.toFixed(6) : '—';
+                document.getElementById('trackLng').innerText = hasCoords ? lng.toFixed(6) : '—';
+                document.getElementById('trackLastUpdate').innerText = now;
+                updateGpsTag('trackGpsTag', gpsLive, hasCoords);
+                if (wifi !== undefined) { updateWifiBars('trackWifiBars', wifi); document.getElementById('trackWifiVal').innerText = wifi + ' dBm'; }
+                if (battery !== undefined) updateBattery('trackBatFill', 'trackBatPct', battery);
+
+                const tChip = document.getElementById('trackStatusChip');
+                const tText = document.getElementById('trackStatusText');
+                const tBanner = document.getElementById('trackBanner');
+                if (status === 'ACTIVE') {
+                    tChip.className = 'status-chip active'; tText.innerText = 'ACTIVE';
+                    tBanner.className = 'tracking-banner banner-active';
+                    tBanner.innerText = isNoSignal ? '🚨 EMERGENCY ACTIVE — GPS NO SIGNAL' : '🚨 EMERGENCY ACTIVE — TRACKING DEVICE 001';
+                } else {
+                    tChip.className = 'status-chip idle'; tText.innerText = 'IDLE';
+                    tBanner.className = 'tracking-banner banner-normal';
+                    tBanner.innerText = '🟢 SYSTEM NORMAL — ALL CLEAR';
+                }
+                document.getElementById('trackHud').innerText = (hasCoords ? 'Lat: ' + lat.toFixed(6) + ' | Lng: ' + lng.toFixed(6) : 'GPS — NO SIGNAL') + ' | Updates: ' + updateCounter;
+
+                if (trackMapObj && trackMarker && hasCoords) {
+                    trackMarker.setLatLng([lat, lng]);
+                    trackMapObj.setView([lat, lng]);
+                    const el = trackMarker.getElement();
+                    if (el) { const c = el.querySelector('.pulse-marker') || el; status === 'ACTIVE' ? c.classList.remove('idle') : c.classList.add('idle'); }
+                    trailCoords.push([lat, lng]);
+                    trailLine.setLatLngs(trailCoords);
+                    trailLine.setStyle({ color: status === 'ACTIVE' ? '#DC2626' : '#3B82F6', opacity: status === 'ACTIVE' ? 0.7 : 0.5 });
+                }
+            }
+
+            // Incident log
+            if (!initialLoad) addIncident(status, lat, lng, isNoSignal, now);
+        }
+
+        // ══════════════════════════ VIEW TRANSITIONS ══════════════════════════
+        function enterTracking() {
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('alertBanner').classList.remove('visible');
+            document.getElementById('trackingView').classList.add('visible');
+            currentView = 'tracking';
+            if (!trackMapInit) initTrackMap();
+            if (trackMapObj) { trackMapObj.setView([lastKnownLat, lastKnownLng], 17); setTimeout(() => trackMapObj.invalidateSize(), 200); }
+        }
+        function backToMonitoring() {
+            document.getElementById('trackingView').classList.remove('visible');
+            document.getElementById('dashboardView').style.display = '';
+            currentView = 'dashboard';
+            if (mainMapObj) setTimeout(() => mainMapObj.invalidateSize(), 200);
+        }
+        function toggleIncidents() {
+            document.getElementById('incidentsPanel').classList.toggle('visible');
+        }
+        function exportReport() {
+            let csv = 'Time,Status,Location\n';
+            incidents.forEach(i => { csv += i.time + ',' + i.status + ',' + i.loc + '\n'; });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'sentinel_report_' + new Date().toISOString().slice(0, 10) + '.csv';
+            a.click();
+        }
+        function printReport() {
+            const w = window.open('', '', 'width=800,height=600');
+            w.document.write('<html><head><title>Emergency Report</title><style>body{font-family:Inter,sans-serif;padding:40px;color:#1E293B;}h1{font-size:20px;margin-bottom:8px;}table{width:100%;border-collapse:collapse;margin-top:20px;}th,td{padding:8px 12px;border:1px solid #E2E5ED;text-align:left;font-size:13px;}th{background:#F5F6FA;font-weight:600;}</style></head><body>');
+            w.document.write('<h1>🛡 Sentinel-Mesh — Emergency Report</h1><p>Generated: ' + new Date().toLocaleString() + '</p><p>Device: DEV-001 | Status: ' + lastKnownStatus + '</p><p>Last Known: ' + lastKnownLat.toFixed(6) + ', ' + lastKnownLng.toFixed(6) + '</p>');
+            w.document.write('<table><tr><th>Time</th><th>Status</th><th>Location</th></tr>');
+            incidents.forEach(i => { w.document.write('<tr><td>' + i.time + '</td><td>' + i.status + '</td><td>' + i.loc + '</td></tr>'); });
+            w.document.write('</table></body></html>');
+            w.document.close();
+            w.focus();
+            w.print();
+        }
+
+        // ══════════════════════════ EMERGENCY POPUP ══════════════════════════
+        function showEmergencyPopup(lat, lng, hasCoords, isNoSignal, gpsLive) {
+            modalShown = true;
+            const now = new Date().toLocaleTimeString('en-US', { hour12: true });
+            document.getElementById('modalTime').innerText = now;
+            if (isNoSignal) {
+                document.getElementById('modalCoords').innerText = 'NO GPS SIGNAL';
+                document.getElementById('modalGps').innerText = '✕ NO SIGNAL';
+                document.getElementById('modalGps').style.color = 'var(--red)';
+            } else if (hasCoords) {
+                document.getElementById('modalCoords').innerText = lat.toFixed(6) + ', ' + lng.toFixed(6);
+                document.getElementById('modalGps').innerText = gpsLive ? '● LIVE GPS' : '◐ LAST KNOWN';
+                document.getElementById('modalGps').style.color = gpsLive ? 'var(--green)' : 'var(--amber)';
+            } else {
+                document.getElementById('modalCoords').innerText = '—';
+                document.getElementById('modalGps').innerText = '—';
+            }
+            document.getElementById('emergencyModal').classList.add('visible');
+            playAlertSound();
+        }
+
+        function playAlertSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                [0, 0.25, 0.5].forEach((delay, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.value = i === 1 ? 660 : 880;
+                    gain.gain.setValueAtTime(0.18, ctx.currentTime + delay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.2);
+                    osc.start(ctx.currentTime + delay);
+                    osc.stop(ctx.currentTime + delay + 0.2);
+                });
+            } catch (e) { /* audio not supported */ }
+        }
+
+        function acknowledgeAlert() {
+            document.getElementById('emergencyModal').classList.remove('visible');
+            alertAcknowledged = true;
+            modalShown = false;
+        }
+
+        function trackFromModal() {
+            document.getElementById('emergencyModal').classList.remove('visible');
+            modalShown = false;
+            alertAcknowledged = true;
+            enterTracking();
+        }
+
+        // ══════════════════════════ FIREBASE ══════════════════════════
+        const firebaseConfig = {
+            apiKey: "AIzaSyCxXmq8B8T1qwufCsPgEyznS9YrLxuFNc4",
+            authDomain: "esp32iotproject-e9fe1.firebaseapp.com",
+            databaseURL: "https://esp32iotproject-e9fe1-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "esp32iotproject-e9fe1"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        database.ref("device001").on("value", function (snapshot) {
+            const data = snapshot.val();
+            if (!data) return;
+            processUpdate(data);
+            if (initialLoad) initialLoad = false;
+        });
+
+        // ══════════════════════════ INIT MAP ON LOAD ══════════════════════════
+        window.addEventListener('load', function () { initMainMap(); });
+
+    </script>
+</body>
+
+</html>
