@@ -11,7 +11,7 @@ const char* password = "hello123";
 String firebaseURL = "https://esp32iotproject-e9fe1-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 // ================= TELEGRAM =================
-String botToken = "8687058189:AAHyYqhE2UAjRLCQLPikGnOt88Uun6rJVVg";
+String botToken = "8687058189:AAHyYqhE2UAjRLCQLPikGnOt88Uun6rJVVg"; 
 
 String chatIDs[] = {
   "1206334941",      // Your ID
