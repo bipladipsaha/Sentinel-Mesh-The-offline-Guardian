@@ -1,0 +1,30 @@
+name: sentinel_mesh
+description: Decentralized Safety Network
+publish_to: 'none'
+
+environment:
+  sdk: '^3.11.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Firebase
+  firebase_core: ^2.30.0
+  firebase_database: ^10.5.0
+  
+  # Location & Permissions
+  geolocator: ^11.0.0
+  permission_handler: ^11.3.0
+  
+  # Notifications & Camera
+  flutter_local_notifications: ^17.1.0
+  camera: ^0.10.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
