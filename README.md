@@ -132,3 +132,10 @@ This project was developed by:
 ## 📜 License
 
 This project is developed for academic and research purposes.
+
+
+## 🎥 Project Demo Video
+
+Watch the working demonstration of the Sentinel Mesh safety system:
+
+🔗 https://drive.google.com/file/d/16RE3Yvbk_A_8LJmS1GmmqQPxhe8BqOlp/view?usp=drivesdk
