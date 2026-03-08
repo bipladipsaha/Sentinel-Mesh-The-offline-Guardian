@@ -51,6 +51,14 @@ bool trackingActive = false;
 float lat = 0.0;
 float lng = 0.0;
 
+// ================= LED =================
+#define STATUS_LED 25
+
+bool wifiReady = false;
+bool loraReady = false;
+bool mpuReady = false;
+bool sosActive = false;
+
 // ================= BUTTON =================
 #define SOS_BUTTON 27
 
@@ -77,6 +85,7 @@ void sendTelegramAlert(String message);
 void sendSOSFlag();
 void readMPU();
 void sendLoRaSOS(float lat, float lng);
+void updateLED();
 
 void setup() {
 
@@ -84,6 +93,9 @@ void setup() {
   gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
 
   pinMode(SOS_BUTTON, INPUT_PULLUP);
+
+  pinMode(STATUS_LED, OUTPUT);
+  digitalWrite(STATUS_LED, LOW);
 
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi");
@@ -94,6 +106,7 @@ void setup() {
   }
 
   Serial.println("\nConnected to WiFi");
+  wifiReady = true;
 
   // Initialize MPU6500
   Wire.begin(21, 22);
@@ -111,6 +124,7 @@ void setup() {
   Wire.endTransmission();
 
   Serial.println("MPU6500 Ready");
+  mpuReady = true;
 
   // Initialize LoRa
   SPI.begin(18, 19, 23, 5);
@@ -122,6 +136,7 @@ void setup() {
   }
 
   Serial.println("LoRa Ready");
+  loraReady = true;
 }
 
 void loop() {
@@ -176,6 +191,7 @@ void loop() {
       if (millis() - stillStart > 3000) {
 
         Serial.println("🚨 REAL FALL CONFIRMED");
+        sosActive = true;
 
         trackingActive = true;
         sendTelegramAlert("🚨 FALL DETECTED");
@@ -227,7 +243,7 @@ void loop() {
       sendIdleStatus();
 
       Serial.println("5s HOLD → TRACKING STOPPED");
-
+      sosActive = false;
       sendTelegramAlert("🛑 Tracking Stopped");
 
       clickCount = 0;
@@ -248,6 +264,7 @@ void loop() {
       trackingActive = true;
       lastTelegramSend = millis();  // Reset telegram timer on SOS start
       Serial.println("3 CLICKS → TRACKING STARTED");
+      sosActive = true;
 
       String message = "🚨 EMERGENCY ALERT 🚨\n";
 
@@ -323,6 +340,9 @@ void loop() {
 
     sendTelegramAlert(message);
   }
+
+  // ================= LED UPDATE =================
+  updateLED();
 }
 
 // ================= READ MPU6500 =================
@@ -350,6 +370,23 @@ void readMPU() {
     gx = gx_raw / 131.0;
     gy = gy_raw / 131.0;
     gz = gz_raw / 131.0;
+  }
+}
+
+// ================= LED STATUS =================
+void updateLED() {
+  if (sosActive) {
+    // Blink LED
+    digitalWrite(STATUS_LED, HIGH);
+    delay(200);
+    digitalWrite(STATUS_LED, LOW);
+    delay(200);
+  } else {
+    if (wifiReady && loraReady && mpuReady) {
+      digitalWrite(STATUS_LED, HIGH);  // System ready
+    } else {
+      digitalWrite(STATUS_LED, LOW);
+    }
   }
 }
 
