@@ -17,9 +17,9 @@ String botToken = "8687058189:AAHyYqhE2UAjRLCQLPikGnOt88Uun6rJVVg";
 
 String chatIDs[] = {
   "1206334941",      // Your ID
-  "7681145312",  // Contact 2
-  "7710246439",  //Anwesha Das
-  "7015801586",  //Anisha Majumdar
+  "7681145312",      // Contact 2
+  "7710246439",      // Anwesha Das
+  "7015801586",      // Anisha Majumdar
 };
 
 const int totalContacts = 4;
@@ -59,16 +59,19 @@ bool loraReady = false;
 bool mpuReady = false;
 bool sosActive = false;
 
-// ================= BUTTON =================
+// ================= BUTTON (INTERRUPT) =================
 #define SOS_BUTTON 27
 
-bool lastButtonState = HIGH;
-unsigned long pressStartTime = 0;
-int clickCount = 0;
-unsigned long lastClickTime = 0;
+volatile bool buttonFlag = false;
+volatile unsigned long lastButtonISR = 0;
 
-const unsigned long MULTI_CLICK_DELAY = 600;
-const unsigned long STOP_HOLD_TIME = 5000;
+void IRAM_ATTR buttonISR() {
+  // Only trigger if pin is actually LOW (real press) and 1s debounce
+  if (digitalRead(SOS_BUTTON) == LOW && millis() - lastButtonISR > 1000) {
+    buttonFlag = true;
+    lastButtonISR = millis();
+  }
+}
 
 // ================= TIMERS =================
 unsigned long lastSendTime = 0;
@@ -76,6 +79,9 @@ const unsigned long SEND_INTERVAL = 5000;
 
 unsigned long lastTelegramSend = 0;
 const unsigned long TELEGRAM_INTERVAL = 30000;  // 30 sec
+
+// ================= HTTP TIMEOUT =================
+const int HTTP_TIMEOUT = 2000;  // 2 second timeout — keeps loop responsive
 
 // ================= FUNCTION DECLARATIONS =================
 void sendActiveData();
@@ -93,6 +99,7 @@ void setup() {
   gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
 
   pinMode(SOS_BUTTON, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(SOS_BUTTON), buttonISR, FALLING);
 
   pinMode(STATUS_LED, OUTPUT);
   digitalWrite(STATUS_LED, LOW);
@@ -139,209 +146,200 @@ void setup() {
   loraReady = true;
 }
 
+// ================= STOP HELPER =================
+// Call this to immediately stop SOS + update Firebase
+void performStop(String source) {
+  trackingActive = false;
+  sosActive = false;
+  autoTriggered = false;
+  freeFallDetected = false;
+  impactDetected = false;
+  Serial.println(source + " → SOS STOPPED");
+  sendIdleStatus();
+}
+
+// Check for stop signals (button + serial) — call between HTTP operations
+void checkForStop() {
+  // Check button interrupt
+  if (buttonFlag && trackingActive) {
+    buttonFlag = false;
+    performStop("BTN");
+    sendTelegramAlert("� Tracking Stopped");
+  }
+
+  // Check serial
+  if (Serial.available()) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    input.toUpperCase();
+    if (input == "STOP") {
+      performStop("Serial");
+    }
+  }
+}
+
 void loop() {
 
-  // ================= MPU AUTO DETECTION =================
-  // Professional Strict Fall Detection
-  readMPU();
+  // ===== PRIORITY #1: CHECK STOP SIGNALS FIRST =====
+  if (buttonFlag) {
+    buttonFlag = false;
 
-  float totalAcc = sqrt(ax*ax + ay*ay + az*az);
-
-  // ===== PHASE 1: FREE FALL (must stay low for 150ms) =====
-  static unsigned long lowStartTime = 0;
-
-  if (totalAcc < 0.5) {
-
-    if (lowStartTime == 0) {
-      lowStartTime = millis();
-    }
-
-    if (millis() - lowStartTime > 50 && !freeFallDetected) {
-      freeFallDetected = true;
-      freeFallTime = millis();
-      Serial.println("Free fall confirmed");
-    }
-
-  } else {
-    lowStartTime = 0;
-  }
-
-  // ===== PHASE 2: IMPACT (within 2s of free fall) =====
-  if (freeFallDetected && !impactDetected && (millis() - freeFallTime < 2000)) {
-
-    if (totalAcc > 1.5) {
-      impactDetected = true;
-      impactTime = millis();
-      freeFallDetected = false;
-      Serial.println("Impact detected");
-    }
-  }
-
-  // ===== PHASE 3: IMMOBILITY (stay still for 3 sec after impact) =====
-  static unsigned long stillStart = 0;
-
-  if (impactDetected) {
-
-    if (abs(gx) < 30 && abs(gy) < 30 && abs(gz) < 30) {
-
-      if (stillStart == 0) {
-        stillStart = millis();
-      }
-
-      if (millis() - stillStart > 3000) {
-
-        Serial.println("🚨 REAL FALL CONFIRMED");
-        sosActive = true;
-
-        trackingActive = true;
-        sendTelegramAlert("🚨 FALL DETECTED");
-        sendLoRaSOS(lat, lng);
-
-        impactDetected = false;
-        stillStart = 0;
-      }
-
-    } else {
-      stillStart = 0;  // Movement detected, restart timer
-    }
-
-    // Timeout: if 10s pass after impact with no confirmation, reset
-    if (millis() - impactTime > 10000) {
-      impactDetected = false;
-      stillStart = 0;
-    }
-  }
-
-  // Reset free fall if not followed by impact within 2s
-  if (freeFallDetected && (millis() - freeFallTime > 2000)) {
-    freeFallDetected = false;
-  }
-
-  // ================= READ GPS =================
-  while (gpsSerial.available()) {
-    gps.encode(gpsSerial.read());
-  }
-
-  // ================= BUTTON LOGIC =================
-  bool buttonState = digitalRead(SOS_BUTTON);
-
-  // Button Pressed
-  if (lastButtonState == HIGH && buttonState == LOW) {
-    pressStartTime = millis();
-  }
-
-  // Button Released
-  if (lastButtonState == LOW && buttonState == HIGH) {
-
-    unsigned long holdDuration = millis() - pressStartTime;
-
-    // STOP (5 sec hold)
-    if (holdDuration >= STOP_HOLD_TIME) {
-
-      trackingActive = false;
-      autoTriggered = false;
-      sendIdleStatus();
-
-      Serial.println("5s HOLD → TRACKING STOPPED");
-      sosActive = false;
+    if (trackingActive) {
+      // TURN OFF SOS
+      performStop("BTN");
       sendTelegramAlert("🛑 Tracking Stopped");
-
-      clickCount = 0;
-    }
-    else {
-      clickCount++;
-      lastClickTime = millis();
-    }
-  }
-
-  lastButtonState = buttonState;
-
-  // 3 Click → START
-  if (clickCount > 0 && (millis() - lastClickTime > MULTI_CLICK_DELAY)) {
-
-    if (clickCount == 3) {
-
+    } else {
+      // TURN ON SOS
       trackingActive = true;
-      lastTelegramSend = millis();  // Reset telegram timer on SOS start
-      Serial.println("3 CLICKS → TRACKING STARTED");
       sosActive = true;
+      lastTelegramSend = millis();
+      Serial.println("BTN: SOS ON");
 
       String message = "🚨 EMERGENCY ALERT 🚨\n";
 
       if (gps.location.isValid()) {
         lat = gps.location.lat();
         lng = gps.location.lng();
-
         message += "Location:\n";
         message += "https://maps.google.com/?q=";
         message += String(lat, 6) + "," + String(lng, 6);
+        sendActiveData();
       } else {
         message += "GPS not available.";
+        sendActiveWithoutGPS();
       }
 
       sendTelegramAlert(message);
       sendLoRaSOS(lat, lng);
     }
-
-    clickCount = 0;
   }
 
-  // ================= SERIAL COMMANDS =================
+  // ===== PRIORITY #2: SERIAL COMMANDS =====
   if (Serial.available()) {
-
     String input = Serial.readStringUntil('\n');
     input.trim();
+    input.toUpperCase();
+
+    Serial.println("Serial RX: [" + input + "]");
 
     if (input == "SOS") {
       trackingActive = true;
+      sosActive = true;
       lastTelegramSend = millis();
+      sendActiveWithoutGPS();
       Serial.println("Serial → Tracking Started");
     }
 
     if (input == "STOP") {
-      trackingActive = false;
-      autoTriggered = false;
-      sendIdleStatus();
-      Serial.println("Serial → Tracking Stopped");
+      performStop("Serial");
     }
   }
 
-  // ================= FIREBASE TRACKING =================
-  if (trackingActive && millis() - lastSendTime > SEND_INTERVAL) {
+  // If stopped, skip everything else
+  if (!trackingActive) {
+    // Still read GPS and MPU in idle
+    while (gpsSerial.available()) { gps.encode(gpsSerial.read()); }
+    readMPU();
+    updateLED();
+
+    // ===== FALL/IMPACT DETECTION (only when NOT tracking) =====
+    float totalAcc = sqrt(ax*ax + ay*ay + az*az);
+
+    // Debug: print sensor values every 2 seconds
+    static unsigned long lastDebugPrint = 0;
+    if (millis() - lastDebugPrint > 2000) {
+      lastDebugPrint = millis();
+      Serial.print("MPU → Acc:");
+      Serial.print(totalAcc, 2);
+      Serial.print(" Gx:");
+      Serial.print(gx, 1);
+      Serial.print(" Gy:");
+      Serial.print(gy, 1);
+      Serial.print(" Gz:");
+      Serial.println(gz, 1);
+    }
+
+    // PHASE 1: Detect hard impact/shake (acc > 2.0g)
+    if (!impactDetected && totalAcc > 2.0) {
+      impactDetected = true;
+      impactTime = millis();
+      Serial.println("💥 Impact/shake detected! Acc=" + String(totalAcc, 2));
+    }
+
+    // PHASE 2: After impact, check for stillness (hold still for 2 seconds)
+    static unsigned long stillStart = 0;
+    if (impactDetected) {
+      if (abs(gx) < 50 && abs(gy) < 50 && abs(gz) < 50 && totalAcc < 1.5) {
+        if (stillStart == 0) {
+          stillStart = millis();
+          Serial.println("⏳ Stillness started... hold still 2s");
+        }
+        if (millis() - stillStart > 2000) {
+          Serial.println("🚨 FALL CONFIRMED — SOS TRIGGERED");
+          sosActive = true;
+          trackingActive = true;
+          sendActiveWithoutGPS();
+          sendTelegramAlert("🚨 FALL DETECTED");
+          sendLoRaSOS(lat, lng);
+          impactDetected = false;
+          stillStart = 0;
+        }
+      } else {
+        if (stillStart != 0) Serial.println("❌ Movement detected, resetting...");
+        stillStart = 0;
+      }
+
+      // Timeout: 10s after impact without confirmation → reset
+      if (millis() - impactTime > 10000) {
+        Serial.println("⏰ Impact timeout, resetting");
+        impactDetected = false;
+        stillStart = 0;
+      }
+    }
+
+    return;  // Skip tracking logic below
+  }
+
+  // ================= TRACKING IS ACTIVE =================
+
+  // Read GPS
+  while (gpsSerial.available()) { gps.encode(gpsSerial.read()); }
+  readMPU();
+
+  // Firebase tracking (every 5s)
+  if (millis() - lastSendTime > SEND_INTERVAL) {
+    checkForStop();  // Check stop before HTTP call
+    if (!trackingActive) return;
 
     lastSendTime = millis();
-
     if (gps.location.isValid()) {
       lat = gps.location.lat();
       lng = gps.location.lng();
       sendActiveData();
-    }
-    else {
+    } else {
       sendActiveWithoutGPS();
     }
   }
 
-  // ================= TELEGRAM PERIODIC UPDATE (every 30s) =================
+  // Telegram periodic (every 30s)
   if (trackingActive && millis() - lastTelegramSend > TELEGRAM_INTERVAL) {
+    checkForStop();  // Check stop before HTTP call
+    if (!trackingActive) return;
 
     lastTelegramSend = millis();
-
     String message = "📍 Live Tracking Update\n";
-
     if (gps.location.isValid()) {
       lat = gps.location.lat();
       lng = gps.location.lng();
-
       message += "https://maps.google.com/?q=";
       message += String(lat, 6) + "," + String(lng, 6);
     } else {
       message += "GPS not available.";
     }
-
     sendTelegramAlert(message);
   }
 
-  // ================= LED UPDATE =================
+  // LED update
   updateLED();
 }
 
@@ -373,14 +371,18 @@ void readMPU() {
   }
 }
 
-// ================= LED STATUS =================
+// ================= LED STATUS (NON-BLOCKING) =================
 void updateLED() {
+  static unsigned long lastBlinkTime = 0;
+  static bool ledState = false;
+
   if (sosActive) {
-    // Blink LED
-    digitalWrite(STATUS_LED, HIGH);
-    delay(200);
-    digitalWrite(STATUS_LED, LOW);
-    delay(200);
+    // Non-blocking blink using millis()
+    if (millis() - lastBlinkTime > 200) {
+      lastBlinkTime = millis();
+      ledState = !ledState;
+      digitalWrite(STATUS_LED, ledState ? HIGH : LOW);
+    }
   } else {
     if (wifiReady && loraReady && mpuReady) {
       digitalWrite(STATUS_LED, HIGH);  // System ready
@@ -403,7 +405,7 @@ void sendLoRaSOS(float lat, float lng) {
   Serial.println("LoRa TX → " + packet);
 }
 
-// ================= TELEGRAM =================
+// ================= TELEGRAM (WITH TIMEOUT) =================
 void sendTelegramAlert(String message) {
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -414,18 +416,20 @@ void sendTelegramAlert(String message) {
 
       String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
 
+      http.setTimeout(HTTP_TIMEOUT);  // ← Prevents hanging
       http.begin(url);
       http.addHeader("Content-Type", "application/x-www-form-urlencoded");
 
       String postData = "chat_id=" + chatIDs[i] + "&text=" + message;
 
-      http.POST(postData);
+      int code = http.POST(postData);
+      Serial.println("Telegram [" + String(i) + "] → " + String(code));
       http.end();
     }
   }
 }
 
-// ================= FIREBASE ACTIVE =================
+// ================= FIREBASE ACTIVE (WITH TIMEOUT) =================
 void sendActiveData() {
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -433,6 +437,7 @@ void sendActiveData() {
     HTTPClient http;
     String url = firebaseURL + "/device001.json";
 
+    http.setTimeout(HTTP_TIMEOUT);  // ← Prevents hanging
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
 
@@ -444,14 +449,13 @@ void sendActiveData() {
     jsonData += "}";
 
     int httpResponseCode = http.PUT(jsonData);
-
-    Serial.println(httpResponseCode);
+    Serial.println("Firebase → " + String(httpResponseCode));
 
     http.end();
   }
 }
 
-// ================= FIREBASE NO GPS =================
+// ================= FIREBASE NO GPS (WITH TIMEOUT) =================
 void sendActiveWithoutGPS() {
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -459,6 +463,7 @@ void sendActiveWithoutGPS() {
     HTTPClient http;
     String url = firebaseURL + "/device001.json";
 
+    http.setTimeout(HTTP_TIMEOUT);  // ← Prevents hanging
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
 
@@ -469,14 +474,13 @@ void sendActiveWithoutGPS() {
     jsonData += "}";
 
     int httpResponseCode = http.PUT(jsonData);
-
-    Serial.println(httpResponseCode);
+    Serial.println("Firebase → " + String(httpResponseCode));
 
     http.end();
   }
 }
 
-// ================= FIREBASE IDLE =================
+// ================= FIREBASE IDLE (WITH TIMEOUT) =================
 void sendIdleStatus() {
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -484,6 +488,7 @@ void sendIdleStatus() {
     HTTPClient http;
     String url = firebaseURL + "/device001.json";
 
+    http.setTimeout(HTTP_TIMEOUT);  // ← Prevents hanging
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
 
@@ -493,8 +498,7 @@ void sendIdleStatus() {
     jsonData += "}";
 
     int httpResponseCode = http.PUT(jsonData);
-
-    Serial.println(httpResponseCode);
+    Serial.println("Firebase → " + String(httpResponseCode));
 
     http.end();
   }

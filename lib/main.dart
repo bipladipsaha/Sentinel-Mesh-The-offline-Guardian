@@ -5,6 +5,8 @@ import 'package:camera/camera.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'screens/ai_chatbot_screen.dart';
+import 'services/fall_detection_service.dart';
 
 late List<CameraDescription> _cameras;
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -110,6 +112,18 @@ class RoleSelectionScreen extends StatelessWidget {
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ResponderScreen())),
                 child: const Text("RESPONDER MODE (COMMUNITY)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
               ),
+              
+              const SizedBox(height: 30),
+
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.all(20),
+                  backgroundColor: const Color(0xFFF4A261),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                ),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SafetyChatbotScreen())),
+                child: const Text("SAFETY CHATBOT (AI ASSISTANT)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
             ],
           ),
         ),
@@ -119,7 +133,7 @@ class RoleSelectionScreen extends StatelessWidget {
 }
 
 // ============================================================================
-// SENDER SCREEN (CAMERA & AUTO-RECORD LOGIC)
+// SENDER SCREEN (CAMERA, AUTO-RECORD & FALL DETECTION LOGIC)
 // ============================================================================
 class SenderScreen extends StatefulWidget {
   const SenderScreen({super.key});
@@ -130,6 +144,11 @@ class SenderScreen extends StatefulWidget {
 class _SenderScreenState extends State<SenderScreen> {
   CameraController? _cameraController;
   bool _isRecording = false;
+  
+  // Fall Detection
+  FallDetectionService? _fallDetectionService;
+  bool _fallDetectionEnabled = false;
+  bool _fallDetected = false;
 
   @override
   void initState() {
@@ -159,6 +178,78 @@ class _SenderScreenState extends State<SenderScreen> {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // FALL DETECTION TOGGLE
+  // ---------------------------------------------------------------------------
+  void _toggleFallDetection(bool enabled) {
+    setState(() => _fallDetectionEnabled = enabled);
+
+    if (enabled) {
+      _startFallDetection();
+    } else {
+      _stopFallDetection();
+    }
+  }
+
+  void _startFallDetection() {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    if (_cameras.isEmpty) return;
+
+    _fallDetectionService = FallDetectionService(
+      onFallDetected: _onFallDetected,
+    );
+
+    // Start streaming camera frames to ML Kit
+    _cameraController!.startImageStream((CameraImage image) {
+      _fallDetectionService?.processCameraImage(image, _cameras[0]);
+    });
+
+    debugPrint("✅ Fall Detection STARTED");
+  }
+
+  void _stopFallDetection() {
+    _cameraController?.stopImageStream();
+    _fallDetectionService?.dispose();
+    _fallDetectionService = null;
+    if (mounted) setState(() => _fallDetected = false);
+    debugPrint("⛔ Fall Detection STOPPED");
+  }
+
+  /// Called by FallDetectionService when a fall is detected.
+  void _onFallDetected() {
+    debugPrint("🚨 FALL DETECTED — AUTO-TRIGGERING SOS!");
+    if (mounted) setState(() => _fallDetected = true);
+
+    // Stop the image stream first (can't record video while streaming)
+    _cameraController?.stopImageStream();
+
+    // Auto-trigger SOS recording
+    if (!_isRecording) {
+      _triggerRecording();
+    }
+
+    // Push fall alert to Firebase so responders are notified
+    FirebaseDatabase.instance.ref('device001').update({
+      'status': 'ACTIVE',
+      'fallDetected': true,
+      'fallTimestamp': DateTime.now().toIso8601String(),
+    });
+
+    // Show on-screen alert
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ FALL DETECTED — SOS Activated Automatically!'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // SOS / RECORDING
+  // ---------------------------------------------------------------------------
   Future<void> _triggerRecording() async {
     if (_cameraController == null || !_cameraController!.value.isInitialized) return;
     if (!_isRecording) {
@@ -169,11 +260,19 @@ class _SenderScreenState extends State<SenderScreen> {
       if (mounted) setState(() => _isRecording = false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Evidence Saved: ${video.path}'), backgroundColor: Colors.green));
+
+      // Restart image stream for fall detection if still enabled
+      if (_fallDetectionEnabled && _cameras.isNotEmpty) {
+        _cameraController!.startImageStream((CameraImage image) {
+          _fallDetectionService?.processCameraImage(image, _cameras[0]);
+        });
+      }
     }
   }
 
   @override
   void dispose() {
+    _fallDetectionService?.dispose();
     _cameraController?.dispose();
     super.dispose();
   }
@@ -199,8 +298,59 @@ class _SenderScreenState extends State<SenderScreen> {
             child: SizedBox(
               width: double.infinity,
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  // Fall Detection Toggle
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              _fallDetectionEnabled ? Icons.shield : Icons.shield_outlined,
+                              color: _fallDetectionEnabled ? Colors.greenAccent : Colors.white70,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text("Fall Detection", style: TextStyle(color: Colors.white, fontSize: 16)),
+                          ],
+                        ),
+                        Switch(
+                          value: _fallDetectionEnabled,
+                          onChanged: _toggleFallDetection,
+                          activeColor: Colors.greenAccent,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Fall Detected Banner
+                  if (_fallDetected)
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.redAccent, width: 2),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Colors.white, size: 28),
+                          SizedBox(width: 12),
+                          Expanded(child: Text("FALL DETECTED — SOS AUTO-ACTIVATED", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14))),
+                        ],
+                      ),
+                    ),
+
+                  const Spacer(),
+
+                  // SOS Button
                   GestureDetector(
                     onTap: _triggerRecording,
                     child: Container(
