@@ -63,6 +63,24 @@ A **NEO-6M GPS module** provides real-time location tracking.
 
 ---
 
+## 🤖 AI Safety Chatbot
+
+The integrated mobile app features a dedicated **AI Safety Assistant** that provides real-time guidance, safety tips, and situational advice when users feel insecure but are not yet in an active emergency.
+
+---
+
+## 📡 Community Responder Radar
+
+A dedicated **Responder Mode** in the app allows nearby community members to act as guardians. When an SOS is triggered, the app alerts all localized responders with a high-priority notification and displays a **live radar distance tracker** to quickly locate the victim.
+
+---
+
+## 📸 Automated Evidence Recording
+
+When an SOS or a heavy impact is confirmed, the mobile app automatically activates the camera and **records video/audio evidence** to the local device storage to capture critical information of the incident.
+
+---
+
 ## 🖥 Software Requirements
 
 **Development Environment:**
