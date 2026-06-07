@@ -21,11 +21,15 @@ class MainActivity : FlutterActivity() {
         latestIntent = intent
 
         // 🔥 Start the background watcher service when the app is opened
-        val serviceIntent = Intent(this, EspWatcherService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
+        try {
+            val serviceIntent = Intent(this, EspWatcherService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 

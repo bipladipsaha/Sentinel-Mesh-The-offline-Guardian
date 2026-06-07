@@ -15,6 +15,7 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.auth.FirebaseAuth
+import android.content.pm.ServiceInfo
 
 class EspWatcherService : Service() {
 
@@ -31,10 +32,18 @@ class EspWatcherService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
-        startForeground(NOTIF_ID, buildForegroundNotification())
-        startWatchingFirebase()
-        Log.d(TAG, "EspWatcherService started")
+        try {
+            createNotificationChannel()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, buildForegroundNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIF_ID, buildForegroundNotification())
+            }
+            startWatchingFirebase()
+            Log.d(TAG, "EspWatcherService started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start foreground service: ${e.message}")
+        }
     }
 
     private fun startWatchingFirebase() {
