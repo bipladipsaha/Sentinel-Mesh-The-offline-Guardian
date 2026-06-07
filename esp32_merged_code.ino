@@ -6,14 +6,39 @@
 #include <SPI.h>
 #include <LoRa.h>
 
+// ================= BLE INCLUDES =================
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+
+// ================= BLE GLOBALS =================
+BLEServer* pServer = NULL;
+BLECharacteristic* pCharacteristic = NULL;
+bool deviceConnected = false;
+
+#define SERVICE_UUID        "0000ffe0-0000-1000-8000-00805f9b34fb"
+#define CHARACTERISTIC_UUID "0000ffe1-0000-1000-8000-00805f9b34fb"
+
+class MyServerCallbacks: public BLEServerCallbacks {
+    void onConnect(BLEServer* pServer) {
+      deviceConnected = true;
+      Serial.println("Sentinel App Connected via BLE!");
+    };
+
+    void onDisconnect(BLEServer* pServer) {
+      deviceConnected = false;
+      Serial.println("Sentinel App Disconnected via BLE!");
+      // Restart advertising so the app can reconnect
+      BLEDevice::startAdvertising();
+    }
+};
+
 // ================= WIFI =================
-const char* ssid = "@@@@";
-const char* password = "9875622802";
+const char* ssid = "iqoo1234";
+const char* password = "hello123";
 
 String firebaseURL = "https://esp32iotproject-e9fe1-default-rtdb.asia-southeast1.firebasedatabase.app";
-
-// ================= DEVICE ID =================
-String deviceID = "";  // Will be set automatically from MAC address
 
 // ================= TELEGRAM =================
 String botToken = "8687058189:AAHyYqhE2UAjRLCQLPikGnOt88Uun6rJVVg";
@@ -32,7 +57,7 @@ TinyGPSPlus gps;
 HardwareSerial gpsSerial(2);
 
 // ================= LORA =================
-#define LORA_SS 5
+#define LORA_SS 13
 #define LORA_RST 14
 #define LORA_DIO0 26
 
@@ -54,8 +79,9 @@ bool trackingActive = false;
 float lat = 0.0;
 float lng = 0.0;
 
-// ================= LED =================
-#define STATUS_LED 25
+// ================= LEDs =================
+#define LED_GREEN 25
+#define LED_RED 32
 
 bool wifiReady = false;
 bool loraReady = false;
@@ -99,17 +125,36 @@ void updateLED();
 void setup() {
 
   Serial.begin(115200);
-
-  // Initialize WiFi peripheral to read the true MAC address
-  WiFi.mode(WIFI_STA);
-
   gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
 
   pinMode(SOS_BUTTON, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(SOS_BUTTON), buttonISR, FALLING);
 
-  pinMode(STATUS_LED, OUTPUT);
-  digitalWrite(STATUS_LED, LOW);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_RED, OUTPUT);
+  digitalWrite(LED_GREEN, LOW);
+  digitalWrite(LED_RED, LOW);
+
+  // ================= BLE INITIALIZATION =================
+  BLEDevice::init("Sentinel_ESP");
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+  pCharacteristic = pService->createCharacteristic(
+                      CHARACTERISTIC_UUID,
+                      BLECharacteristic::PROPERTY_READ   |
+                      BLECharacteristic::PROPERTY_WRITE  |
+                      BLECharacteristic::PROPERTY_NOTIFY |
+                      BLECharacteristic::PROPERTY_INDICATE
+                    );
+  pCharacteristic->addDescriptor(new BLE2902());
+  pService->start();
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(false);
+  pAdvertising->setMinPreferred(0x0);
+  BLEDevice::startAdvertising();
+  Serial.println("BLE Ready - Waiting for App Connection");
 
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi");
@@ -121,15 +166,6 @@ void setup() {
 
   Serial.println("\nConnected to WiFi");
   wifiReady = true;
-
-  // --- GENERATE AND PRINT DEVICE ID ---
-  String mac = WiFi.macAddress();
-  mac.replace(":", "");
-  deviceID = "SM-" + mac;
-  Serial.println("\n=================================");
-  Serial.println("🔥 DEVICE ID: " + deviceID);
-  Serial.println("=================================\n");
-  // ------------------------------------
 
   // Initialize MPU6500
   Wire.begin(21, 22);
@@ -150,16 +186,16 @@ void setup() {
   mpuReady = true;
 
   // Initialize LoRa
-  SPI.begin(18, 19, 23, 5);
+  SPI.begin(18, 19, 23, LORA_SS);
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
 
   if (!LoRa.begin(433E6)) {
-    Serial.println("LoRa init failed!");
-    while (true);
+    Serial.println("LoRa init failed! Check wiring.");
+    loraReady = false;
+  } else {
+    Serial.println("LoRa Ready");
+    loraReady = true;
   }
-
-  Serial.println("LoRa Ready");
-  loraReady = true;
 }
 
 // ================= STOP HELPER =================
@@ -211,6 +247,15 @@ void loop() {
       lastTelegramSend = millis();
       Serial.println("BTN: SOS ON");
 
+      // === TRIGGER PHONE RECORDING VIA BLE ===
+      if (deviceConnected) {
+        pCharacteristic->setValue("2"); // 2 = Button SOS
+        pCharacteristic->notify();
+        delay(100);
+        pCharacteristic->setValue("0"); // Clear the trigger
+        Serial.println("BLE: Instructed phone to record");
+      }
+
       String message = "🚨 EMERGENCY ALERT 🚨\n";
 
       if (gps.location.isValid()) {
@@ -244,6 +289,14 @@ void loop() {
       lastTelegramSend = millis();
       sendActiveWithoutGPS();
       Serial.println("Serial → Tracking Started");
+      
+      // === TRIGGER PHONE RECORDING VIA BLE ===
+      if (deviceConnected) {
+        pCharacteristic->setValue("2"); // Using 2 for manual serial trigger as well
+        pCharacteristic->notify();
+        delay(100);
+        pCharacteristic->setValue("0"); // Clear the trigger
+      }
     }
 
     if (input == "STOP") {
@@ -258,31 +311,8 @@ void loop() {
     readMPU();
     updateLED();
 
-    // --- PRINT DEVICE ID EVERY 5 SECONDS ---
-    static unsigned long lastIDPrint = 0;
-    if (millis() - lastIDPrint > 5000) {
-      lastIDPrint = millis();
-      Serial.println("\n🔥 DEVICE ID: " + deviceID);
-      Serial.println("Make sure Firebase rules are .read: true, .write: true");
-    }
-    // ---------------------------------------
-
     // ===== FALL/IMPACT DETECTION (only when NOT tracking) =====
     float totalAcc = sqrt(ax*ax + ay*ay + az*az);
-
-    // Debug: print sensor values every 2 seconds
-    static unsigned long lastDebugPrint = 0;
-    if (millis() - lastDebugPrint > 2000) {
-      lastDebugPrint = millis();
-      Serial.print("MPU → Acc:");
-      Serial.print(totalAcc, 2);
-      Serial.print(" Gx:");
-      Serial.print(gx, 1);
-      Serial.print(" Gy:");
-      Serial.print(gy, 1);
-      Serial.print(" Gz:");
-      Serial.println(gz, 1);
-    }
 
     // PHASE 1: Detect hard impact/shake (acc > 2.0g)
     if (!impactDetected && totalAcc > 2.0) {
@@ -303,6 +333,16 @@ void loop() {
           Serial.println("🚨 FALL CONFIRMED — SOS TRIGGERED");
           sosActive = true;
           trackingActive = true;
+
+          // === TRIGGER PHONE RECORDING VIA BLE ===
+          if (deviceConnected) {
+            pCharacteristic->setValue("1"); // 1 = Impact SOS
+            pCharacteristic->notify();
+            delay(100);
+            pCharacteristic->setValue("0"); // Clear the trigger
+            Serial.println("BLE: Instructed phone to record (IMPACT)");
+          }
+
           sendActiveWithoutGPS();
           sendTelegramAlert("🚨 FALL DETECTED");
           sendLoRaSOS(lat, lng);
@@ -370,14 +410,12 @@ void loop() {
 
 // ================= READ MPU6500 =================
 void readMPU() {
-
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x3B);
   Wire.endTransmission(false);
   Wire.requestFrom(MPU_ADDR, 14);
 
   if (Wire.available() == 14) {
-
     int16_t ax_raw = Wire.read() << 8 | Wire.read();
     int16_t ay_raw = Wire.read() << 8 | Wire.read();
     int16_t az_raw = Wire.read() << 8 | Wire.read();
@@ -402,17 +440,18 @@ void updateLED() {
   static bool ledState = false;
 
   if (sosActive) {
-    // Non-blocking blink using millis()
+    digitalWrite(LED_GREEN, LOW);
     if (millis() - lastBlinkTime > 200) {
       lastBlinkTime = millis();
       ledState = !ledState;
-      digitalWrite(STATUS_LED, ledState ? HIGH : LOW);
+      digitalWrite(LED_RED, ledState ? HIGH : LOW);
     }
   } else {
+    digitalWrite(LED_RED, LOW);
     if (wifiReady && loraReady && mpuReady) {
-      digitalWrite(STATUS_LED, HIGH);  // System ready
+      digitalWrite(LED_GREEN, HIGH); 
     } else {
-      digitalWrite(STATUS_LED, LOW);
+      digitalWrite(LED_GREEN, LOW);
     }
   }
 }
@@ -420,33 +459,24 @@ void updateLED() {
 // ================= LORA SOS =================
 void sendLoRaSOS(float lat, float lng) {
   Serial.println("Preparing LoRa packet...");
-
   String packet = "SOS," + String(lat, 6) + "," + String(lng, 6);
-
   LoRa.beginPacket();
   LoRa.print(packet);
   LoRa.endPacket();
-
   Serial.println("LoRa TX → " + packet);
 }
 
 // ================= TELEGRAM (WITH TIMEOUT) =================
 void sendTelegramAlert(String message) {
-
   if (WiFi.status() == WL_CONNECTED) {
-
+    message.replace("\n", "\\n");
     for (int i = 0; i < totalContacts; i++) {
-
       HTTPClient http;
-
       String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
-
-      http.setTimeout(HTTP_TIMEOUT);  // ← Prevents hanging
+      http.setTimeout(HTTP_TIMEOUT);
       http.begin(url);
-      http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-
-      String postData = "chat_id=" + chatIDs[i] + "&text=" + message;
-
+      http.addHeader("Content-Type", "application/json");
+      String postData = "{\"chat_id\":\"" + chatIDs[i] + "\", \"text\":\"" + message + "\"}";
       int code = http.POST(postData);
       Serial.println("Telegram [" + String(i) + "] → " + String(code));
       http.end();
@@ -456,75 +486,57 @@ void sendTelegramAlert(String message) {
 
 // ================= FIREBASE ACTIVE (WITH TIMEOUT) =================
 void sendActiveData() {
-
   if (WiFi.status() == WL_CONNECTED) {
-
     HTTPClient http;
     String url = firebaseURL + "/device001.json";
-
-    http.setTimeout(HTTP_TIMEOUT);  // ← Prevents hanging
+    http.setTimeout(HTTP_TIMEOUT);
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
-
     String jsonData = "{";
     jsonData += "\"status\":\"ACTIVE\",";
-    jsonData += "\"deviceID\":\"" + deviceID + "\",";
+    jsonData += "\"deviceID\":1,";
     jsonData += "\"lat\":" + String(lat, 6) + ",";
     jsonData += "\"lng\":" + String(lng, 6);
     jsonData += "}";
-
     int httpResponseCode = http.PUT(jsonData);
     Serial.println("Firebase → " + String(httpResponseCode));
-
     http.end();
   }
 }
 
 // ================= FIREBASE NO GPS (WITH TIMEOUT) =================
 void sendActiveWithoutGPS() {
-
   if (WiFi.status() == WL_CONNECTED) {
-
     HTTPClient http;
-    String url = firebaseURL + "/devices/" + deviceID + ".json";
-
-    http.setTimeout(HTTP_TIMEOUT);  // ← Prevents hanging
+    String url = firebaseURL + "/device001.json";
+    http.setTimeout(HTTP_TIMEOUT);
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
-
     String jsonData = "{";
     jsonData += "\"status\":\"ACTIVE\",";
-    jsonData += "\"deviceID\":\"" + deviceID + "\",";
+    jsonData += "\"deviceID\":1,";
     jsonData += "\"gps\":\"NO_SIGNAL\"";
     jsonData += "}";
-
     int httpResponseCode = http.PUT(jsonData);
     Serial.println("Firebase → " + String(httpResponseCode));
-
     http.end();
   }
 }
 
 // ================= FIREBASE IDLE (WITH TIMEOUT) =================
 void sendIdleStatus() {
-
   if (WiFi.status() == WL_CONNECTED) {
-
     HTTPClient http;
-    String url = firebaseURL + "/devices/" + deviceID + ".json";
-
-    http.setTimeout(HTTP_TIMEOUT);  // ← Prevents hanging
+    String url = firebaseURL + "/device001.json";
+    http.setTimeout(HTTP_TIMEOUT);
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
-
     String jsonData = "{";
     jsonData += "\"status\":\"IDLE\",";
-    jsonData += "\"deviceID\":\"" + deviceID + "\"";
+    jsonData += "\"deviceID\":1";
     jsonData += "}";
-
     int httpResponseCode = http.PUT(jsonData);
     Serial.println("Firebase → " + String(httpResponseCode));
-
     http.end();
   }
 }

@@ -26,7 +26,7 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         
-        minSdk = flutter.minSdkVersion  // <--- 2. CHANGED: Must be 21 for geolocator & notifications
+        minSdk = flutter.minSdkVersion  // <--- 2. CHANGED: Must be 21 for Agora, Google Maps, Geolocator
         
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -49,4 +49,9 @@ flutter {
 // <--- 3. ADDED: The actual desugaring library dependency --->
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+
+    // 🔥 Firebase Android SDK for use in EspWatcherService (Kotlin native)
+    implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
+    implementation("com.google.firebase:firebase-database-ktx")
+    implementation("com.google.firebase:firebase-auth-ktx")
 }

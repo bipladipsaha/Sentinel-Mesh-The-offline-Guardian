@@ -1529,9 +1529,16 @@
         };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        database.ref("device001").on("value", function (snapshot) {
-            const data = snapshot.val();
-            if (!data) return;
+        database.ref("devices").on("value", function (snapshot) {
+            const allDevices = snapshot.val();
+            if (!allDevices) return;
+
+            // Get the first device from the devices folder
+            const deviceIds = Object.keys(allDevices);
+            if (deviceIds.length === 0) return;
+
+            const data = allDevices[deviceIds[0]];
+
             processUpdate(data);
             if (initialLoad) initialLoad = false;
         });
