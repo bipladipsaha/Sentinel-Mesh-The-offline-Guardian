@@ -32,9 +32,13 @@ Future<void> _backgroundBleScan(FlutterLocalNotificationsPlugin flnp) async {
   final String serviceUuid = "0000ffe0-0000-1000-8000-00805f9b34fb";
   final String charUuid = "0000ffe1-0000-1000-8000-00805f9b34fb";
 
-  if (await FlutterBluePlus.isSupported == false) return;
-
-  await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+  try {
+    if (await FlutterBluePlus.isSupported == false) return;
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+  } catch (e) {
+    debugPrint("⚠️ Background BLE Scan Error (Permissions missing or BT off): $e");
+    return;
+  }
 
   FlutterBluePlus.scanResults.listen((results) {
     for (ScanResult r in results) {
@@ -403,7 +407,7 @@ class _NeonButtonState extends State<_NeonButton> {
       onTapCancel: () => setState(() => _pressed = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
         decoration: BoxDecoration(
           color: _pressed ? widget.glowColor.withOpacity(0.15) : widget.fillColor,
           borderRadius: BorderRadius.circular(16),
@@ -416,14 +420,19 @@ class _NeonButtonState extends State<_NeonButton> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(widget.icon, color: widget.glowColor, size: 24),
-            const SizedBox(width: 12),
-            Text(
-              widget.label,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-                color: widget.glowColor,
+            const SizedBox(width: 8),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                    color: widget.glowColor,
+                  ),
+                ),
               ),
             ),
           ],

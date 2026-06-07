@@ -49,6 +49,12 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- 🔥 Flutter Background Service (fixes Android 14 crash) -->
+        <service
+            android:name="id.flutter.flutter_background_service.BackgroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="true" />
+
         <!-- 🔥 Auto-start service on phone boot -->
         <receiver
             android:name=".BootReceiver"
