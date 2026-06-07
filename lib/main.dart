@@ -144,31 +144,15 @@ class _Neon {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 1. Initialize Camera
+  // 1. Initialize Camera (non-critical — app works without it)
   try {
     _cameras = await availableCameras();
   } catch (e) {
+    _cameras = [];
     debugPrint("⚠️ Camera Init Error: $e");
   }
   
-  // 2. Initialize Notifications & Request Android 13 Permissions early
-  try {
-    const AndroidInitializationSettings initSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings = InitializationSettings(android: initSettingsAndroid);
-    await flutterLocalNotificationsPlugin.initialize(initSettings);
-    
-    // Explicitly ask for notification permission on startup (Android 13+)
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
-
-    // Start background service
-    await initializeService();
-  } catch (e) {
-    debugPrint("⚠️ Notification/Service Init Error: $e");
-  }
-  
-  // 3. Initialize Firebase with correct google-services.json keys
+  // 2. Initialize Firebase FIRST (critical for app functionality)
   try {
     await Firebase.initializeApp(
       options: const FirebaseOptions(
@@ -183,6 +167,27 @@ void main() async {
     );
   } catch (e) {
     debugPrint("⚠️ Firebase Init Error: $e");
+  }
+  
+  // 3. Initialize Notifications (non-critical)
+  try {
+    const AndroidInitializationSettings initSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings = InitializationSettings(android: initSettingsAndroid);
+    await flutterLocalNotificationsPlugin.initialize(initSettings);
+    
+    // Explicitly ask for notification permission on startup (Android 13+)
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+  } catch (e) {
+    debugPrint("⚠️ Notification Init Error: $e");
+  }
+
+  // 4. Start background service AFTER Firebase (non-critical)
+  try {
+    await initializeService();
+  } catch (e) {
+    debugPrint("⚠️ Background Service Init Error: $e");
   }
   
   runApp(const SentinelApp());

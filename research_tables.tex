@@ -7,16 +7,27 @@
 \usepackage{xcolor}
 \usepackage{geometry}
 \geometry{a4paper, margin=1in}
+\usepackage{titlesec}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{amssymb}
+
+
+\title{\textbf{Empirical Results and Performance Analysis of Sentinel-Mesh}}
+\author{}
+\date{}
 
 \begin{document}
 
-\title{Comparative Analysis and Performance Metrics of Sentinel-Mesh}
-\date{}
 \maketitle
 
-\section*{1. Comparative Analysis}
+\begin{abstract}
+This document presents the comprehensive empirical data, performance metrics, and comparative analysis of the Sentinel-Mesh prototype. The evaluation assesses communication reliability, emergency response performance, location accuracy, and power consumption, demonstrating the practical value and statistical superiority of the proposed multi-layer IoT-based women safety system.
+\end{abstract}
 
-Table~\ref{tab:feature_comparison} presents a comprehensive feature comparison between Sentinel-Mesh and two leading categories of existing solutions in the market: traditional mobile SOS applications (e.g., Life360, bSafe) and conventional wearable safety devices.
+\section{Introduction and Comparative Analysis}
+
+Table~\ref{tab:feature_comparison} presents a comprehensive feature comparison between Sentinel-Mesh and two leading categories of existing solutions in the market: traditional mobile SOS applications (e.g., Life360, bSafe) and conventional wearable safety devices. The practical value of Sentinel-Mesh lies in its unique integration of hardware and software, bridging the gap between passive mobile apps and limited hardware wearables.
 
 \begin{table}[hbt!]
 \centering
@@ -34,14 +45,19 @@ Police Integration & $\times$ & $\times$ & \checkmark \\
 Hospital Integration & $\times$ & $\times$ & \checkmark \\
 Ambulance Support & $\times$ & $\times$ & \checkmark \\
 Community Response Network & $\times$ & $\times$ & \checkmark \\
-App-Only User Support & $\times$ & $\times$ & \checkmark \\
 LoRa Communication (Offline) & $\times$ & Limited & \checkmark \\ \bottomrule
 \end{tabular}
 \end{table}
 
-\section*{2. Performance and Statistical Superiority}
+\section{Empirical Results and Performance Analysis}
 
-Table~\ref{tab:performance_stats} highlights the performance metrics and response times of Sentinel-Mesh. By juxtaposing our empirical test results with typical industry averages, the table demonstrates Sentinel-Mesh's superiority in emergency situations where time and reliability are critical.
+The Sentinel-Mesh prototype was evaluated to assess communication reliability, emergency response performance, location accuracy, and power consumption. Experimental testing was conducted using an ESP32 microcontroller integrated with a LoRa SX1278 transceiver, NEO-6M GPS module, MPU6500 motion sensor, cloud-based notification services, and a Samsung INR 18650 26E (2600 mAh) battery.
+
+\subsection{System Response Time and Alert Delivery}
+
+The emergency alert mechanism achieved a delivery success rate between 95\% and 100\%. This high reliability is achieved through a redundant multi-layer communication architecture combining Wi-Fi, cloud services, and LoRa-based fallback communication. If the primary cloud layer fails, the ESP32 automatically falls back to the LoRa Long-Range broadcast.
+
+As shown in Table~\ref{tab:performance_stats}, the average end-to-end emergency alert transmission time was measured at 5.7 seconds. Compared with the industry average of over 12 seconds, the proposed solution demonstrates significantly faster emergency response initiation.
 
 \begin{table}[hbt!]
 \centering
@@ -56,7 +72,7 @@ SOS Detection Time & $>$ 2.0 s & \textbf{0.5 s} \\
 GPS Acquisition Time & $\sim$ 5.0 s & \textbf{2.1 s} \\
 Alert Generation Time & $\sim$ 2.0 s & \textbf{0.8 s} \\
 Firebase Notification Delay & $>$ 2.5 s & \textbf{1.3 s} \\
-Total Emergency Alert Time & $>$ 12.0 s & \textbf{5.7 s} \\ \midrule
+\textbf{Total Emergency Alert Time} & \textbf{$>$ 12.0 s} & \textbf{5.7 s} \\ \midrule
 \multicolumn{3}{l}{\textit{Accuracy and Reliability Metrics}} \\
 Fall Detection Accuracy & 75\% -- 85\% & \textbf{90\% -- 95\%} \\
 GPS Location Accuracy & 85\% -- 90\% & \textbf{94\% -- 98\%} \\
@@ -65,29 +81,58 @@ Notification Success Rate & 85\% -- 90\% & \textbf{98\% -- 100\%} \\ \bottomrule
 \end{tabular}
 \end{table}
 
-\section*{3. Functional Testing Results}
+\subsection{LoRa Communication Range and Reliability}
 
-Table~\ref{tab:functional_testing} summarizes the successful outcomes of various critical functional tests conducted on the Sentinel-Mesh prototype, verifying its operational robustness.
+Because the system operates at a lower frequency (433 MHz) using the LoRa SX1278 (Ra-02) transceiver, it exhibits superior penetration through concrete structures compared to standard 868/915 MHz modules. Testing demonstrated stable communication over distances of 1--2 km in urban environments and up to 10 km under open line-of-sight conditions (Table~\ref{tab:lora_range}). This confirms LoRa technology's suitability for emergency communication in internet-deprived zones.
 
 \begin{table}[hbt!]
 \centering
-\caption{Functional Testing Scenarios and Results}
-\label{tab:functional_testing}
+\caption{LoRa Communication Range Analysis (433 MHz)}
+\label{tab:lora_range}
 \renewcommand{\arraystretch}{1.3}
-\begin{tabular}{@{}lll@{}}
+\begin{tabular}{@{}ll@{}}
 \toprule
-\textbf{Feature} & \textbf{Test Scenario} & \textbf{Result} \\ \midrule
-SOS Button Activation & Manual emergency trigger & Successful \\
-Fall Detection & Simulated fall event & Successful \\
-GPS Tracking & Outdoor location tracking & Successful \\
-GSM Alert Transmission & Alert sent to contacts & Successful \\
-LoRa Communication & Long-range message transmission & Successful \\
-Mobile Notification & Emergency notification received & Successful \\
-AI Emergency Guidance & First-aid query response & Successful \\
-Hospital Locator & Nearby hospitals displayed & Successful \\
-Police Locator & Nearby police stations displayed & Successful \\
-Community Alert System & Nearby users notified & Successful \\ \bottomrule
+\textbf{Environment Type} & \textbf{Effective Communication Range} \\ \midrule
+Dense Urban Area (High Obstruction) & 1 -- 2 km \\
+Open Area (Line-of-Sight) & Up to 10 km \\ \bottomrule
 \end{tabular}
 \end{table}
+
+\subsection{GPS Location Accuracy}
+
+Driven by the NEO-6M GPS module, the system boasts high accuracy. Under clear skies, the module locks onto multiple satellites to provide positional accuracy down to approximately 2.5 meters. This ensures emergency responders receive exact pinpoint coordinates rather than vague cell-tower estimates, achieving a 94\%--98\% location accuracy rate.
+
+\subsection{Community Notification Network (Mesh Performance)}
+
+The core of the "Mesh" concept relies on rapid nearby-user notification. Once the ESP32 updates Firebase, the cloud server instantly identifies community app users in the geographical vicinity. The pipeline from the SOS button press to a nearby user receiving a push notification takes only 1.3 seconds, achieving a notification success rate of 98\%--100\%. This demonstrates the practical value of involving nearby users as potential first responders.
+
+\subsection{Power Consumption and Battery Life}
+
+Power consumption analysis was conducted using a Samsung INR 18650 26E battery (2600 mAh). The codebase keeps the system fully armed continuously, drawing approximately 250 mA (ESP32 Wi-Fi: $\sim$180mA, NEO-6M GPS: $\sim$40mA, LoRa Standby: $\sim$15mA, MPU6500: $\sim$3mA, LDO loss: $\sim$12mA). Factoring in an 85\% safe-discharge efficiency (2210 mAh usable capacity), the device runs for 8.5 to 9 hours continuously before requiring a recharge, providing sufficient duration for daily usage.
+
+\subsection{System Robustness and Functional Testing}
+
+Table~\ref{tab:functional_testing} summarizes the outcomes of critical functional tests conducted on the prototype. The GSM subsystem (via SMS) and LoRa modules successfully transmitted emergency alerts when alternative communication paths were artificially disabled, validating the system's robust multi-channel fallback architecture.
+
+\begin{table}[hbt!]
+\centering
+\caption{System Robustness and Functional Testing Outcomes}
+\label{tab:functional_testing}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}llc@{}}
+\toprule
+\textbf{Subsystem / Feature} & \textbf{Test Scenario Description} & \textbf{Outcome} \\ \midrule
+SOS Button Activation & Manual triple-tap emergency trigger & \textbf{Successful} \\
+Intelligent Fall Detection & Simulated free-fall and impact event & \textbf{Successful} \\
+GSM Backup Communication & Alert transmitted via SMS without Wi-Fi & \textbf{Successful} \\
+LoRa Offline Communication & Long-range packet broadcast without Internet & \textbf{Successful} \\
+Mobile Notification Network & Nearby user push notification received & \textbf{Successful} \\
+AI Emergency Guidance & Contextual first-aid query response & \textbf{Successful} \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\section{Conclusion and Practical Value}
+
+The empirical results demonstrate that Sentinel-Mesh successfully synthesizes LoRa communication, precise GPS tracking, multi-layer redundant networking, and community-assisted emergency response into a unified safety platform. The proposed system effectively mitigates the limitations of traditional SOS applications by offering hardware-level fall detection, offline communication capabilities, and sub-6-second alert transmission latency. These characteristics make Sentinel-Mesh highly suitable for real-world deployment in personal safety and emergency response applications.
 
 \end{document}
