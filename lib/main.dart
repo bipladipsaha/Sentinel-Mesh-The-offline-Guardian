@@ -107,6 +107,9 @@ Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceIns
                            platformDetails
                          );
                          
+                         // Notify the active UI isolate
+                         service.invoke('sos_triggered');
+                         
                          // Forcefully launch the app UI to start recording
                          if (Platform.isAndroid) {
                            const intent = AndroidIntent(
@@ -332,6 +335,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
   StreamSubscription? _bleSub;
+  StreamSubscription? _sosSub;
   String _bleState = 'disconnected';
 
   @override
@@ -346,6 +350,12 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
         setState(() {
           _bleState = event?['state'] ?? 'disconnected';
         });
+      }
+    });
+
+    _sosSub = FlutterBackgroundService().on('sos_triggered').listen((_) {
+      if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const SenderScreen()));
       }
     });
     
@@ -393,6 +403,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
   @override
   void dispose() {
     _bleSub?.cancel();
+    _sosSub?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
@@ -715,6 +726,7 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
   bool _isRecording = false;
   late AnimationController _sosPulse;
   late Animation<double> _sosAnim;
+  StreamSubscription? _sosSub;
 
   @override
   void initState() {
@@ -722,6 +734,13 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
     _sosPulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
     _sosAnim = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _sosPulse, curve: Curves.easeInOut));
     _initCamera();
+
+    _sosSub = FlutterBackgroundService().on('sos_triggered').listen((_) {
+      if (mounted && !_isRecording) {
+        debugPrint('ESP32 Wakeup live trigger detected! Starting record...');
+        _triggerSos();
+      }
+    });
   }
 
   Future<void> _initCamera() async {
@@ -787,6 +806,7 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
   @override
   void dispose() {
     _sosPulse.dispose();
+    _sosSub?.cancel();
     _cameraController?.dispose();
     super.dispose();
   }
