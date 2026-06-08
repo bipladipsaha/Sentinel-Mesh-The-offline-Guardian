@@ -26,15 +26,21 @@ void onStart(ServiceInstance service) async {
     service.stopSelf();
   });
 
-  _backgroundBleScan(flutterLocalNotificationsPlugin);
+  service.on('force_connect').listen((event) {
+    _backgroundBleScan(flutterLocalNotificationsPlugin, service, force: true);
+  });
+
+  _backgroundBleScan(flutterLocalNotificationsPlugin, service);
 }
 
 StreamSubscription<List<ScanResult>>? _scanSub;
 Timer? _scanTimer;
 
-Future<void> _backgroundBleScan(FlutterLocalNotificationsPlugin flnp) async {
+Future<void> _backgroundBleScan(FlutterLocalNotificationsPlugin flnp, ServiceInstance service, {bool force = false}) async {
   final String serviceUuid = "0000ffe0-0000-1000-8000-00805f9b34fb";
   final String charUuid = "0000ffe1-0000-1000-8000-00805f9b34fb";
+
+  service.invoke('ble_state', {'state': 'scanning'});
 
   _scanSub?.cancel();
   _scanSub = FlutterBluePlus.scanResults.listen((results) async {
@@ -43,12 +49,14 @@ Future<void> _backgroundBleScan(FlutterLocalNotificationsPlugin flnp) async {
         try { await FlutterBluePlus.stopScan(); } catch (_) {}
         _scanTimer?.cancel();
         
+        service.invoke('ble_state', {'state': 'connecting'});
+        
         try {
            await r.device.connect();
            List<BluetoothService> services = await r.device.discoverServices();
-           for (var service in services) {
-             if (service.uuid.toString() == serviceUuid) {
-               for (var charc in service.characteristics) {
+           for (var svc in services) {
+             if (svc.uuid.toString() == serviceUuid) {
+               for (var charc in svc.characteristics) {
                  if (charc.uuid.toString() == charUuid) {
                    await charc.setNotifyValue(true);
                    charc.lastValueStream.listen((value) async {
@@ -81,14 +89,18 @@ Future<void> _backgroundBleScan(FlutterLocalNotificationsPlugin flnp) async {
              }
            }
            
+           service.invoke('ble_state', {'state': 'connected'});
+           
            r.device.connectionState.listen((state) {
              if (state == BluetoothConnectionState.disconnected) {
-               _backgroundBleScan(flnp);
+               service.invoke('ble_state', {'state': 'disconnected'});
+               _backgroundBleScan(flnp, service);
              }
            });
         } catch (e) {
           debugPrint("BLE Connect error: $e");
-          _backgroundBleScan(flnp);
+          service.invoke('ble_state', {'state': 'disconnected'});
+          _backgroundBleScan(flnp, service);
         }
         break;
       }
@@ -111,7 +123,9 @@ Future<void> _backgroundBleScan(FlutterLocalNotificationsPlugin flnp) async {
     if (await FlutterBluePlus.isSupported == true) {
       await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
     }
-  } catch (e) {}
+  } catch (e) {
+    service.invoke('ble_state', {'state': 'disconnected'});
+  }
 }
 
 Future<void> initializeService() async {
@@ -254,9 +268,8 @@ class RoleSelectionScreen extends StatefulWidget {
 class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
-  final BleService _bleService = BleService();
-  StreamSubscription<BleConnectionState>? _bleSub;
-  BleConnectionState _bleState = BleConnectionState.disconnected;
+  StreamSubscription? _bleSub;
+  String _bleState = 'disconnected';
 
   @override
   void initState() {
@@ -265,9 +278,19 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
     _pulseAnim = Tween<double>(begin: 0.3, end: 1.0).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
     _requestPermissions();
 
-    _bleState = _bleService.currentState;
-    _bleSub = _bleService.stateStream.listen((state) {
-      if (mounted) setState(() => _bleState = state);
+    _bleSub = FlutterBackgroundService().on('ble_state').listen((event) {
+      if (mounted) {
+        setState(() {
+          _bleState = event?['state'] ?? 'disconnected';
+        });
+      }
+    });
+    
+    // Check initial connection status natively just in case
+    FlutterBluePlus.connectedSystemDevices.then((devices) {
+      if (devices.any((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP')) {
+        if (mounted) setState(() => _bleState = 'connected');
+      }
     });
   }
 
@@ -282,13 +305,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
   }
 
   void _onConnectTap() {
-    if (_bleState == BleConnectionState.connected) {
-      _bleService.stop();
-    } else if (_bleState == BleConnectionState.disconnected) {
-      _bleService.startScanningAndConnect(
-        () {}, // SOS callback (handled by background service)
-        () { if (mounted) setState(() {}); },
-      );
+    if (_bleState == 'disconnected') {
+      setState(() => _bleState = 'scanning');
+      FlutterBackgroundService().invoke('force_connect');
     }
   }
 
@@ -301,35 +320,35 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
 
   Color _bleStatusColor() {
     switch (_bleState) {
-      case BleConnectionState.connected: return _Neon.lime;
-      case BleConnectionState.connecting: return _Neon.amber;
-      case BleConnectionState.scanning: return _Neon.cyan;
-      case BleConnectionState.disconnected: return _Neon.hotRed;
+      case 'connected': return _Neon.lime;
+      case 'connecting': return _Neon.amber;
+      case 'scanning': return _Neon.cyan;
+      default: return _Neon.hotRed;
     }
   }
 
   String _bleStatusText() {
     switch (_bleState) {
-      case BleConnectionState.connected: return "ESP32 CONNECTED";
-      case BleConnectionState.connecting: return "CONNECTING…";
-      case BleConnectionState.scanning: return "SCANNING…";
-      case BleConnectionState.disconnected: return "DISCONNECTED";
+      case 'connected': return "ESP32 CONNECTED";
+      case 'connecting': return "CONNECTING…";
+      case 'scanning': return "SCANNING…";
+      default: return "DISCONNECTED";
     }
   }
 
   IconData _bleStatusIcon() {
     switch (_bleState) {
-      case BleConnectionState.connected: return Icons.bluetooth_connected;
-      case BleConnectionState.connecting: return Icons.bluetooth_searching;
-      case BleConnectionState.scanning: return Icons.bluetooth_searching;
-      case BleConnectionState.disconnected: return Icons.bluetooth_disabled;
+      case 'connected': return Icons.bluetooth_connected;
+      case 'connecting': return Icons.bluetooth_searching;
+      case 'scanning': return Icons.bluetooth_searching;
+      default: return Icons.bluetooth_disabled;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final Color statusColor = _bleStatusColor();
-    final bool isWorking = _bleState == BleConnectionState.scanning || _bleState == BleConnectionState.connecting;
+    final bool isWorking = _bleState == 'scanning' || _bleState == 'connecting';
 
     return Scaffold(
       body: Container(
@@ -451,7 +470,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                                 child: CircularProgressIndicator(strokeWidth: 2, color: statusColor),
                               )
                             : Text(
-                                _bleState == BleConnectionState.connected ? "DISCONNECT" : "CONNECT",
+                                _bleState == 'connected' ? "CONNECTED" : "CONNECT",
                                 style: TextStyle(
                                   color: statusColor,
                                   fontSize: 11,
