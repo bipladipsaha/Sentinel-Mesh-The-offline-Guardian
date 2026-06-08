@@ -17,6 +17,11 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/ble_service.dart';
 
+bool _isBleInitialized = false;
+bool _isConnecting = false;
+bool _autoScanEnabled = false;
+BluetoothDevice? _connectedDevice;
+
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,10 +32,12 @@ void onStart(ServiceInstance service) async {
   });
 
   service.on('force_connect').listen((event) {
+    _autoScanEnabled = true;
     _triggerScan(service);
   });
 
   service.on('cancel_scan').listen((event) {
+    _autoScanEnabled = false;
     _isConnecting = false;
     _connectedDevice?.disconnect();
     _connectedDevice = null;
@@ -39,12 +46,7 @@ void onStart(ServiceInstance service) async {
   });
 
   await _initBackgroundBle(flutterLocalNotificationsPlugin, service);
-  _triggerScan(service);
 }
-
-bool _isBleInitialized = false;
-bool _isConnecting = false;
-BluetoothDevice? _connectedDevice;
 
 Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceInstance service) async {
   if (_isBleInitialized) return;
@@ -114,16 +116,24 @@ Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceIns
         } catch (e) {
           debugPrint("BLE Connect error: $e");
           _connectedDevice = null;
-          _isConnecting = false;
           service.invoke('ble_state', {'state': 'disconnected'});
+          // Cooldown to prevent instant loop from cached stream results
+          await Future.delayed(const Duration(seconds: 5));
+          _isConnecting = false;
         }
         break; // Only process the first matched device
       }
     }
   });
 
+  FlutterBluePlus.isScanning.listen((isScanning) {
+    if (!isScanning && !_isConnecting && _connectedDevice == null) {
+      service.invoke('ble_state', {'state': 'disconnected'});
+    }
+  });
+
   Timer.periodic(const Duration(seconds: 15), (timer) async {
-    if (_connectedDevice != null || _isConnecting) return;
+    if (!_autoScanEnabled || _connectedDevice != null || _isConnecting) return;
     
     try {
       var connectedDevices = await FlutterBluePlus.connectedSystemDevices;
@@ -335,12 +345,25 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
     ].request();
   }
 
-  void _onConnectTap() {
+  void _onConnectTap() async {
     if (_bleState == 'disconnected') {
-      setState(() => _bleState = 'scanning');
-      FlutterBackgroundService().invoke('force_connect');
+      var scanPerm = await Permission.bluetoothScan.request();
+      var connPerm = await Permission.bluetoothConnect.request();
+      var locPerm = await Permission.location.request();
+      
+      if ((scanPerm.isGranted || scanPerm.isLimited) && (connPerm.isGranted || connPerm.isLimited)) {
+        FlutterBackgroundService().invoke('force_connect');
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Bluetooth permissions required to connect!'),
+              backgroundColor: _Neon.hotRed,
+            ),
+          );
+        }
+      }
     } else {
-      setState(() => _bleState = 'disconnected');
       FlutterBackgroundService().invoke('cancel_scan');
     }
   }
@@ -489,22 +512,27 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                       ),
                       // Connect / Disconnect button
                       GestureDetector(
-                        onTap: isWorking ? null : _onConnectTap,
+                        onTap: _onConnectTap,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 300),
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            color: isWorking ? statusColor.withOpacity(0.1) : statusColor.withOpacity(0.15),
+                            color: isWorking ? statusColor.withOpacity(0.2) : statusColor.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: statusColor.withOpacity(isWorking ? 0.2 : 0.6), width: 1),
+                            border: Border.all(color: statusColor.withOpacity(0.6), width: 1),
                           ),
-                          child: isWorking
-                            ? SizedBox(
-                                width: 16, height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: statusColor),
-                              )
-                            : Text(
-                                _bleState == 'disconnected' ? "CONNECT" : (_bleState == 'connected' ? "DISCONNECT" : "CANCEL SCAN"),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isWorking) ...[
+                                SizedBox(
+                                  width: 12, height: 12,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: statusColor),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              Text(
+                                _bleState == 'disconnected' ? "CONNECT" : (_bleState == 'connected' ? "DISCONNECT" : "CANCEL"),
                                 style: TextStyle(
                                   color: statusColor,
                                   fontSize: 11,
@@ -512,6 +540,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                                   letterSpacing: 1,
                                 ),
                               ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
