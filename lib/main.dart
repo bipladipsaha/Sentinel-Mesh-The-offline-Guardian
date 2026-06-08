@@ -15,6 +15,7 @@ import 'dart:convert';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/ble_service.dart';
 
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
@@ -158,6 +159,7 @@ class _Neon {
   static const Color magenta   = Color(0xFFFF2D78);
   static const Color lime      = Color(0xFF39FF14);
   static const Color hotRed    = Color(0xFFFF3333);
+  static const Color amber     = Color(0xFFFFB300);
   static const Color textMain  = Color(0xFFE8E8EC);
   static const Color textDim   = Color(0xFF6B6B80);
 }
@@ -252,6 +254,9 @@ class RoleSelectionScreen extends StatefulWidget {
 class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
+  final BleService _bleService = BleService();
+  StreamSubscription<BleConnectionState>? _bleSub;
+  BleConnectionState _bleState = BleConnectionState.disconnected;
 
   @override
   void initState() {
@@ -259,6 +264,11 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
     _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 0.3, end: 1.0).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
     _requestPermissions();
+
+    _bleState = _bleService.currentState;
+    _bleSub = _bleService.stateStream.listen((state) {
+      if (mounted) setState(() => _bleState = state);
+    });
   }
 
   Future<void> _requestPermissions() async {
@@ -271,14 +281,56 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
     ].request();
   }
 
+  void _onConnectTap() {
+    if (_bleState == BleConnectionState.connected) {
+      _bleService.stop();
+    } else if (_bleState == BleConnectionState.disconnected) {
+      _bleService.startScanningAndConnect(
+        () {}, // SOS callback (handled by background service)
+        () { if (mounted) setState(() {}); },
+      );
+    }
+  }
+
   @override
   void dispose() {
+    _bleSub?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
 
+  Color _bleStatusColor() {
+    switch (_bleState) {
+      case BleConnectionState.connected: return _Neon.lime;
+      case BleConnectionState.connecting: return _Neon.amber;
+      case BleConnectionState.scanning: return _Neon.cyan;
+      case BleConnectionState.disconnected: return _Neon.hotRed;
+    }
+  }
+
+  String _bleStatusText() {
+    switch (_bleState) {
+      case BleConnectionState.connected: return "ESP32 CONNECTED";
+      case BleConnectionState.connecting: return "CONNECTING…";
+      case BleConnectionState.scanning: return "SCANNING…";
+      case BleConnectionState.disconnected: return "DISCONNECTED";
+    }
+  }
+
+  IconData _bleStatusIcon() {
+    switch (_bleState) {
+      case BleConnectionState.connected: return Icons.bluetooth_connected;
+      case BleConnectionState.connecting: return Icons.bluetooth_searching;
+      case BleConnectionState.scanning: return Icons.bluetooth_searching;
+      case BleConnectionState.disconnected: return Icons.bluetooth_disabled;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final Color statusColor = _bleStatusColor();
+    final bool isWorking = _bleState == BleConnectionState.scanning || _bleState == BleConnectionState.connecting;
+
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -291,12 +343,13 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
           ),
         ),
         child: SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const SizedBox(height: 16),
                 // ── Pulsing Shield Icon with Neon Glow ──
                 AnimatedBuilder(
                   animation: _pulseAnim,
@@ -340,7 +393,79 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 3, color: _Neon.textDim),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 28),
+
+                // ── BLE Status Chip + Connect Button ──
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 400),
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: statusColor.withOpacity(0.4), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(color: statusColor.withOpacity(0.15), blurRadius: 16, spreadRadius: 0),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      // Animated status dot
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 400),
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: statusColor,
+                          boxShadow: [BoxShadow(color: statusColor.withOpacity(0.6), blurRadius: 8)],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Icon(_bleStatusIcon(), color: statusColor, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _bleStatusText(),
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                      // Connect / Disconnect button
+                      GestureDetector(
+                        onTap: isWorking ? null : _onConnectTap,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isWorking ? statusColor.withOpacity(0.1) : statusColor.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: statusColor.withOpacity(isWorking ? 0.2 : 0.6), width: 1),
+                          ),
+                          child: isWorking
+                            ? SizedBox(
+                                width: 16, height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: statusColor),
+                              )
+                            : Text(
+                                _bleState == BleConnectionState.connected ? "DISCONNECT" : "CONNECT",
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 28),
 
                 // ── Sender Button ──
                 _NeonButton(
@@ -401,6 +526,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
               ],
             ),
           ),
