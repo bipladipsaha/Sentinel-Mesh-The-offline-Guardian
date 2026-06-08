@@ -59,7 +59,8 @@ Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceIns
     if (_isConnecting || _connectedDevice != null) return;
     
     for (ScanResult r in results) {
-      if (r.device.platformName == 'Sentinel_ESP' || r.device.advName == 'Sentinel_ESP') {
+      if (r.device.platformName == 'Sentinel_ESP' || r.device.advName == 'Sentinel_ESP' || 
+          r.device.platformName == 'Sentinel' || r.device.advName == 'Sentinel') {
         _isConnecting = true;
         try { await FlutterBluePlus.stopScan(); } catch (_) {}
         service.invoke('ble_state', {'state': 'connecting'});
@@ -137,8 +138,8 @@ Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceIns
     
     try {
       var connectedDevices = await FlutterBluePlus.connectedSystemDevices;
-      if (connectedDevices.any((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP')) {
-        _connectedDevice = connectedDevices.firstWhere((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP');
+      if (connectedDevices.any((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP' || d.platformName == 'Sentinel' || d.advName == 'Sentinel')) {
+        _connectedDevice = connectedDevices.firstWhere((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP' || d.platformName == 'Sentinel' || d.advName == 'Sentinel');
         service.invoke('ble_state', {'state': 'connected'});
         _isConnecting = false;
         return;
