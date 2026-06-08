@@ -27,32 +27,37 @@ void onStart(ServiceInstance service) async {
   });
 
   service.on('force_connect').listen((event) {
-    _backgroundBleScan(flutterLocalNotificationsPlugin, service, force: true);
+    _triggerScan(service);
   });
 
-  _backgroundBleScan(flutterLocalNotificationsPlugin, service);
+  await _initBackgroundBle(flutterLocalNotificationsPlugin, service);
+  _triggerScan(service);
 }
 
-StreamSubscription<List<ScanResult>>? _scanSub;
-Timer? _scanTimer;
+bool _isBleInitialized = false;
+bool _isConnecting = false;
+BluetoothDevice? _connectedDevice;
 
-Future<void> _backgroundBleScan(FlutterLocalNotificationsPlugin flnp, ServiceInstance service, {bool force = false}) async {
+Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceInstance service) async {
+  if (_isBleInitialized) return;
+  _isBleInitialized = true;
+
   final String serviceUuid = "0000ffe0-0000-1000-8000-00805f9b34fb";
   final String charUuid = "0000ffe1-0000-1000-8000-00805f9b34fb";
 
-  service.invoke('ble_state', {'state': 'scanning'});
-
-  _scanSub?.cancel();
-  _scanSub = FlutterBluePlus.scanResults.listen((results) async {
+  FlutterBluePlus.scanResults.listen((results) async {
+    if (_isConnecting || _connectedDevice != null) return;
+    
     for (ScanResult r in results) {
       if (r.device.platformName == 'Sentinel_ESP' || r.device.advName == 'Sentinel_ESP') {
+        _isConnecting = true;
         try { await FlutterBluePlus.stopScan(); } catch (_) {}
-        _scanTimer?.cancel();
-        
         service.invoke('ble_state', {'state': 'connecting'});
         
         try {
-           await r.device.connect();
+           await r.device.connect(autoConnect: false, timeout: const Duration(seconds: 10));
+           _connectedDevice = r.device;
+           
            List<BluetoothService> services = await r.device.discoverServices();
            for (var svc in services) {
              if (svc.uuid.toString() == serviceUuid) {
@@ -93,35 +98,53 @@ Future<void> _backgroundBleScan(FlutterLocalNotificationsPlugin flnp, ServiceIns
            
            r.device.connectionState.listen((state) {
              if (state == BluetoothConnectionState.disconnected) {
+               _connectedDevice = null;
+               _isConnecting = false;
                service.invoke('ble_state', {'state': 'disconnected'});
-               _backgroundBleScan(flnp, service);
              }
            });
         } catch (e) {
           debugPrint("BLE Connect error: $e");
+          _connectedDevice = null;
+          _isConnecting = false;
           service.invoke('ble_state', {'state': 'disconnected'});
-          _backgroundBleScan(flnp, service);
         }
-        break;
+        break; // Only process the first matched device
       }
     }
   });
 
-  _scanTimer?.cancel();
-  _scanTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+  Timer.periodic(const Duration(seconds: 15), (timer) async {
+    if (_connectedDevice != null || _isConnecting) return;
+    
+    try {
+      var connectedDevices = await FlutterBluePlus.connectedSystemDevices;
+      if (connectedDevices.any((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP')) {
+        _connectedDevice = connectedDevices.firstWhere((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP');
+        service.invoke('ble_state', {'state': 'connected'});
+        _isConnecting = false;
+        return;
+      }
+    } catch (_) {}
+
     if (FlutterBluePlus.isScanningNow == false) {
       try {
         if (await FlutterBluePlus.isSupported == false) return;
-        await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+        service.invoke('ble_state', {'state': 'scanning'});
+        await FlutterBluePlus.startScan(timeout: const Duration(seconds: 8));
       } catch (e) {
         debugPrint("⚠️ Background BLE Scan Error: $e");
       }
     }
   });
-  
+}
+
+Future<void> _triggerScan(ServiceInstance service) async {
+  if (_connectedDevice != null || _isConnecting || FlutterBluePlus.isScanningNow) return;
   try {
     if (await FlutterBluePlus.isSupported == true) {
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+      service.invoke('ble_state', {'state': 'scanning'});
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 8));
     }
   } catch (e) {
     service.invoke('ble_state', {'state': 'disconnected'});
