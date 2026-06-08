@@ -336,7 +336,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
   late Animation<double> _pulseAnim;
   StreamSubscription? _bleSub;
   StreamSubscription? _sosSub;
+  StreamSubscription? _firebaseSosSub;
   String _bleState = 'disconnected';
+  bool _alreadyNavigatedToSos = false;
 
   @override
   void initState() {
@@ -355,16 +357,39 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
 
     _sosSub = FlutterBackgroundService().on('sos_triggered').listen((_) {
       if (mounted && ModalRoute.of(context)?.isCurrent == true) {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const SenderScreen()));
+        _navigateToSender();
+      }
+    });
+
+    // 🔥 Firebase SOS listener — most reliable path
+    _firebaseSosSub = FirebaseDatabase.instance
+        .ref('device001/status')
+        .onValue
+        .listen((event) {
+      final status = event.snapshot.value?.toString() ?? 'IDLE';
+      debugPrint('Firebase device001/status = $status');
+      if (status == 'ACTIVE' && mounted && !_alreadyNavigatedToSos) {
+        if (ModalRoute.of(context)?.isCurrent == true) {
+          debugPrint('🚨 Firebase ACTIVE detected! Navigating to SOS camera...');
+          _navigateToSender();
+        }
+      } else if (status != 'ACTIVE') {
+        _alreadyNavigatedToSos = false;
       }
     });
     
     // Check initial connection status natively just in case
     FlutterBluePlus.connectedSystemDevices.then((devices) {
-      if (devices.any((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP')) {
+      if (devices.any((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP' || d.platformName == 'Sentinel' || d.advName == 'Sentinel')) {
         if (mounted) setState(() => _bleState = 'connected');
       }
     });
+  }
+
+  void _navigateToSender() {
+    if (_alreadyNavigatedToSos) return;
+    _alreadyNavigatedToSos = true;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const SenderScreen()));
   }
 
   Future<void> _requestPermissions() async {
@@ -404,6 +429,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
   void dispose() {
     _bleSub?.cancel();
     _sosSub?.cancel();
+    _firebaseSosSub?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
@@ -727,6 +753,7 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
   late AnimationController _sosPulse;
   late Animation<double> _sosAnim;
   StreamSubscription? _sosSub;
+  StreamSubscription? _firebaseSosSub;
 
   @override
   void initState() {
@@ -737,7 +764,20 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
 
     _sosSub = FlutterBackgroundService().on('sos_triggered').listen((_) {
       if (mounted && !_isRecording) {
-        debugPrint('ESP32 Wakeup live trigger detected! Starting record...');
+        debugPrint('BLE SOS trigger detected! Starting record...');
+        _triggerSos();
+      }
+    });
+
+    // 🔥 Firebase SOS listener — most reliable path
+    _firebaseSosSub = FirebaseDatabase.instance
+        .ref('device001/status')
+        .onValue
+        .listen((event) {
+      final status = event.snapshot.value?.toString() ?? 'IDLE';
+      debugPrint('SenderScreen Firebase status = $status');
+      if (status == 'ACTIVE' && mounted && !_isRecording) {
+        debugPrint('🚨 Firebase ACTIVE detected on SenderScreen! Auto-recording...');
         _triggerSos();
       }
     });
@@ -807,6 +847,7 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
   void dispose() {
     _sosPulse.dispose();
     _sosSub?.cancel();
+    _firebaseSosSub?.cancel();
     _cameraController?.dispose();
     super.dispose();
   }
