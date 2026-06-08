@@ -707,6 +707,7 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
   late Animation<double> _sosAnim;
   StreamSubscription? _sosSub;
   StreamSubscription? _firebaseSosSub;
+  StreamSubscription? _directBleSub;
 
   @override
   void initState() {
@@ -717,7 +718,7 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
 
     _sosSub = FlutterBackgroundService().on('sos_triggered').listen((_) {
       if (mounted && !_isRecording) {
-        debugPrint('BLE SOS trigger detected! Starting record...');
+        debugPrint('BLE SOS trigger (background) detected! Starting record...');
         if (_cameraController == null || !_cameraController!.value.isInitialized) {
           _pendingSosTrigger = true;
         } else {
@@ -726,7 +727,7 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
       }
     });
 
-    // 🔥 Firebase SOS listener — most reliable path
+    // 🔥 Firebase SOS listener
     _firebaseSosSub = FirebaseDatabase.instance
         .ref('device001/status')
         .onValue
@@ -742,6 +743,62 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
         }
       }
     });
+
+    // 🔌 DIRECT BLE listener in UI thread — bypasses background service entirely
+    _setupDirectBleListener();
+  }
+
+  Future<void> _setupDirectBleListener() async {
+    try {
+      // Find any already-connected Sentinel ESP32 device
+      List<BluetoothDevice> connectedDevices = await FlutterBluePlus.connectedSystemDevices;
+      BluetoothDevice? espDevice;
+      for (var d in connectedDevices) {
+        if (d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP' ||
+            d.platformName == 'Sentinel' || d.advName == 'Sentinel') {
+          espDevice = d;
+          break;
+        }
+      }
+
+      if (espDevice == null) {
+        debugPrint('⚡ Direct BLE: No connected ESP32 found, will rely on background service.');
+        return;
+      }
+
+      debugPrint('⚡ Direct BLE: Found connected ESP32: ${espDevice.platformName}');
+      List<BluetoothService> services = await espDevice.discoverServices();
+      for (var svc in services) {
+        if (svc.uuid.toString() == '0000ffe0-0000-1000-8000-00805f9b34fb') {
+          for (var charc in svc.characteristics) {
+            if (charc.uuid.toString() == '0000ffe1-0000-1000-8000-00805f9b34fb') {
+              debugPrint('⚡ Direct BLE: Subscribed to SOS characteristic!');
+              await charc.setNotifyValue(true);
+              _directBleSub = charc.onValueReceived.listen((value) {
+                if (value.isNotEmpty) {
+                  String msg = utf8.decode(value);
+                  debugPrint('⚡ Direct BLE received: "$msg"');
+                  if (msg.trim() == '1' || msg.trim() == '2') {
+                    debugPrint('🚨🚨🚨 DIRECT BLE SOS TRIGGER! Starting recording NOW!');
+                    if (mounted && !_isRecording) {
+                      if (_cameraController == null || !_cameraController!.value.isInitialized) {
+                        _pendingSosTrigger = true;
+                      } else {
+                        _triggerSos();
+                      }
+                    }
+                  }
+                }
+              });
+              return; // Done
+            }
+          }
+        }
+      }
+      debugPrint('⚡ Direct BLE: SOS characteristic not found on device.');
+    } catch (e) {
+      debugPrint('⚡ Direct BLE setup error: $e');
+    }
   }
 
   Future<void> _initCamera() async {
@@ -814,6 +871,7 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
     _sosPulse.dispose();
     _sosSub?.cancel();
     _firebaseSosSub?.cancel();
+    _directBleSub?.cancel();
     _cameraController?.dispose();
     super.dispose();
   }
