@@ -30,6 +30,14 @@ void onStart(ServiceInstance service) async {
     _triggerScan(service);
   });
 
+  service.on('cancel_scan').listen((event) {
+    _isConnecting = false;
+    _connectedDevice?.disconnect();
+    _connectedDevice = null;
+    try { FlutterBluePlus.stopScan(); } catch (_) {}
+    service.invoke('ble_state', {'state': 'disconnected'});
+  });
+
   await _initBackgroundBle(flutterLocalNotificationsPlugin, service);
   _triggerScan(service);
 }
@@ -331,6 +339,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
     if (_bleState == 'disconnected') {
       setState(() => _bleState = 'scanning');
       FlutterBackgroundService().invoke('force_connect');
+    } else {
+      setState(() => _bleState = 'disconnected');
+      FlutterBackgroundService().invoke('cancel_scan');
     }
   }
 
@@ -493,7 +504,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                                 child: CircularProgressIndicator(strokeWidth: 2, color: statusColor),
                               )
                             : Text(
-                                _bleState == 'connected' ? "CONNECTED" : "CONNECT",
+                                _bleState == 'disconnected' ? "CONNECT" : (_bleState == 'connected' ? "DISCONNECT" : "CANCEL SCAN"),
                                 style: TextStyle(
                                   color: statusColor,
                                   fontSize: 11,
