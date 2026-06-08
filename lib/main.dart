@@ -84,7 +84,7 @@ Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceIns
                for (var charc in svc.characteristics) {
                  if (charc.uuid.toString() == charUuid) {
                    await charc.setNotifyValue(true);
-                   charc.lastValueStream.listen((value) async {
+                   charc.onValueReceived.listen((value) async {
                      if (value.isNotEmpty) {
                        String msg = utf8.decode(value);
                        if (msg.trim() == '1' || msg.trim() == '2') {
