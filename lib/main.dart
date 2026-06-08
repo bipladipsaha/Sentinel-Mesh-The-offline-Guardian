@@ -28,24 +28,22 @@ void onStart(ServiceInstance service) async {
   _backgroundBleScan(flutterLocalNotificationsPlugin);
 }
 
+StreamSubscription<List<ScanResult>>? _scanSub;
+Timer? _scanTimer;
+
 Future<void> _backgroundBleScan(FlutterLocalNotificationsPlugin flnp) async {
   final String serviceUuid = "0000ffe0-0000-1000-8000-00805f9b34fb";
   final String charUuid = "0000ffe1-0000-1000-8000-00805f9b34fb";
 
-  try {
-    if (await FlutterBluePlus.isSupported == false) return;
-    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
-  } catch (e) {
-    debugPrint("⚠️ Background BLE Scan Error (Permissions missing or BT off): $e");
-    return;
-  }
-
-  FlutterBluePlus.scanResults.listen((results) {
+  _scanSub?.cancel();
+  _scanSub = FlutterBluePlus.scanResults.listen((results) async {
     for (ScanResult r in results) {
       if (r.device.platformName == 'Sentinel_ESP' || r.device.advName == 'Sentinel_ESP') {
-        FlutterBluePlus.stopScan();
+        try { await FlutterBluePlus.stopScan(); } catch (_) {}
+        _scanTimer?.cancel();
         
-        r.device.connect().then((_) async {
+        try {
+           await r.device.connect();
            List<BluetoothService> services = await r.device.discoverServices();
            for (var service in services) {
              if (service.uuid.toString() == serviceUuid) {
@@ -84,16 +82,35 @@ Future<void> _backgroundBleScan(FlutterLocalNotificationsPlugin flnp) async {
            
            r.device.connectionState.listen((state) {
              if (state == BluetoothConnectionState.disconnected) {
-               Future.delayed(const Duration(seconds: 5), () => _backgroundBleScan(flnp));
+               _backgroundBleScan(flnp);
              }
            });
-        }).catchError((e) {
+        } catch (e) {
           debugPrint("BLE Connect error: $e");
-        });
+          _backgroundBleScan(flnp);
+        }
         break;
       }
     }
   });
+
+  _scanTimer?.cancel();
+  _scanTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+    if (FlutterBluePlus.isScanningNow == false) {
+      try {
+        if (await FlutterBluePlus.isSupported == false) return;
+        await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+      } catch (e) {
+        debugPrint("⚠️ Background BLE Scan Error: $e");
+      }
+    }
+  });
+  
+  try {
+    if (await FlutterBluePlus.isSupported == true) {
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+    }
+  } catch (e) {}
 }
 
 Future<void> initializeService() async {
@@ -241,6 +258,17 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
     super.initState();
     _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 0.3, end: 1.0).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+    _requestPermissions();
+  }
+
+  Future<void> _requestPermissions() async {
+    await [
+      Permission.location,
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.camera,
+      Permission.microphone,
+    ].request();
   }
 
   @override
