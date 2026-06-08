@@ -15,6 +15,8 @@ import 'dart:convert';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:android_intent_plus/android_intent.dart';
+import 'dart:io';
 import 'services/ble_service.dart';
 
 bool _isBleInitialized = false;
@@ -31,19 +33,26 @@ void onStart(ServiceInstance service) async {
     service.stopSelf();
   });
 
-  service.on('force_connect').listen((event) {
+  service.on('force_connect').listen((event) async {
     _autoScanEnabled = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_scan_enabled', true);
     _triggerScan(service);
   });
 
-  service.on('cancel_scan').listen((event) {
+  service.on('cancel_scan').listen((event) async {
     _autoScanEnabled = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_scan_enabled', false);
     _isConnecting = false;
     _connectedDevice?.disconnect();
     _connectedDevice = null;
     try { FlutterBluePlus.stopScan(); } catch (_) {}
     service.invoke('ble_state', {'state': 'disconnected'});
   });
+
+  final prefs = await SharedPreferences.getInstance();
+  _autoScanEnabled = prefs.getBool('auto_scan_enabled') ?? false;
 
   await _initBackgroundBle(flutterLocalNotificationsPlugin, service);
 }
@@ -97,6 +106,18 @@ Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceIns
                            'Impact or button detected! Launching Sentinel...', 
                            platformDetails
                          );
+                         
+                         // Forcefully launch the app UI to start recording
+                         if (Platform.isAndroid) {
+                           const intent = AndroidIntent(
+                             action: 'android.intent.action.MAIN',
+                             package: 'com.example.sentinel_mesh',
+                             componentName: 'com.example.sentinel_mesh.MainActivity',
+                             arguments: <String, dynamic>{'AUTO_RECORD': true},
+                             flags: <int>[268435456], // FLAG_ACTIVITY_NEW_TASK
+                           );
+                           await intent.launch();
+                         }
                        }
                      }
                    });
