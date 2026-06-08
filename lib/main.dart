@@ -78,56 +78,7 @@ Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceIns
            await r.device.connect(autoConnect: false, timeout: const Duration(seconds: 10));
            _connectedDevice = r.device;
            
-           List<BluetoothService> services = await r.device.discoverServices();
-           for (var svc in services) {
-             if (svc.uuid.toString() == serviceUuid) {
-               for (var charc in svc.characteristics) {
-                 if (charc.uuid.toString() == charUuid) {
-                   await charc.setNotifyValue(true);
-                   charc.onValueReceived.listen((value) async {
-                     if (value.isNotEmpty) {
-                       String msg = utf8.decode(value);
-                       if (msg.trim() == '1' || msg.trim() == '2') {
-                         SharedPreferences prefs = await SharedPreferences.getInstance();
-                         await prefs.setBool('auto_start_sos', true);
-                         
-                         const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-                           'emergency_wakeup',
-                           'Emergency Wakeup',
-                           importance: Importance.max,
-                           priority: Priority.max,
-                           fullScreenIntent: true,
-                           category: AndroidNotificationCategory.alarm,
-                         );
-                         const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
-                         await flnp.show(
-                           888, 
-                           '🚨 ESP32 SOS TRIGGERED!', 
-                           'Impact or button detected! Launching Sentinel...', 
-                           platformDetails
-                         );
-                         
-                         // Notify the active UI isolate
-                         service.invoke('sos_triggered');
-                         
-                         // Forcefully launch the app UI to start recording
-                         if (Platform.isAndroid) {
-                           const intent = AndroidIntent(
-                             action: 'android.intent.action.MAIN',
-                             package: 'com.example.sentinel_mesh',
-                             componentName: 'com.example.sentinel_mesh.MainActivity',
-                             arguments: <String, dynamic>{'AUTO_RECORD': true},
-                             flags: <int>[268435456], // FLAG_ACTIVITY_NEW_TASK
-                           );
-                           await intent.launch();
-                         }
-                       }
-                     }
-                   });
-                 }
-               }
-             }
-           }
+           await _setupBleListeners(_connectedDevice!, service, flnp);
            
            service.invoke('ble_state', {'state': 'connected'});
            
@@ -166,6 +117,7 @@ Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceIns
         _connectedDevice = connectedDevices.firstWhere((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP' || d.platformName == 'Sentinel' || d.advName == 'Sentinel');
         service.invoke('ble_state', {'state': 'connected'});
         _isConnecting = false;
+        await _setupBleListeners(_connectedDevice!, service, flutterLocalNotificationsPlugin);
         return;
       }
     } catch (_) {}
@@ -750,6 +702,7 @@ class SenderScreen extends StatefulWidget {
 class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderStateMixin {
   CameraController? _cameraController;
   bool _isRecording = false;
+  bool _pendingSosTrigger = false;
   late AnimationController _sosPulse;
   late Animation<double> _sosAnim;
   StreamSubscription? _sosSub;
@@ -765,7 +718,11 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
     _sosSub = FlutterBackgroundService().on('sos_triggered').listen((_) {
       if (mounted && !_isRecording) {
         debugPrint('BLE SOS trigger detected! Starting record...');
-        _triggerSos();
+        if (_cameraController == null || !_cameraController!.value.isInitialized) {
+          _pendingSosTrigger = true;
+        } else {
+          _triggerSos();
+        }
       }
     });
 
@@ -778,7 +735,11 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
       debugPrint('SenderScreen Firebase status = $status');
       if (status == 'ACTIVE' && mounted && !_isRecording) {
         debugPrint('🚨 Firebase ACTIVE detected on SenderScreen! Auto-recording...');
-        _triggerSos();
+        if (_cameraController == null || !_cameraController!.value.isInitialized) {
+          _pendingSosTrigger = true;
+        } else {
+          _triggerSos();
+        }
       }
     });
   }
@@ -808,6 +769,11 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
     if (autoStart && !_isRecording) {
       debugPrint('ESP32 Wakeup detected! Starting record...');
       await prefs.setBool('auto_start_sos', false);
+      _pendingSosTrigger = true;
+    }
+
+    if (_pendingSosTrigger) {
+      _pendingSosTrigger = false;
       _triggerSos();
     }
   }
@@ -1289,5 +1255,60 @@ class _ResponderScreenState extends State<ResponderScreen> with SingleTickerProv
         ],
       ),
     );
+  }
+}
+
+Future<void> _setupBleListeners(BluetoothDevice device, ServiceInstance service, FlutterLocalNotificationsPlugin flnp) async {
+  try {
+    List<BluetoothService> services = await device.discoverServices();
+    for (var svc in services) {
+      if (svc.uuid.toString() == "0000ffe0-0000-1000-8000-00805f9b34fb") {
+        for (var charc in svc.characteristics) {
+          if (charc.uuid.toString() == "0000ffe1-0000-1000-8000-00805f9b34fb") {
+            await charc.setNotifyValue(true);
+            charc.onValueReceived.listen((value) async {
+              if (value.isNotEmpty) {
+                String msg = utf8.decode(value);
+                if (msg.trim() == '1' || msg.trim() == '2') {
+                  SharedPreferences prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('auto_start_sos', true);
+                  
+                  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+                    'emergency_wakeup',
+                    'Emergency Wakeup',
+                    importance: Importance.max,
+                    priority: Priority.max,
+                    fullScreenIntent: true,
+                    category: AndroidNotificationCategory.alarm,
+                  );
+                  const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+                  await flnp.show(
+                    888, 
+                    '🚨 ESP32 SOS TRIGGERED!', 
+                    'Impact or button detected! Launching Sentinel...', 
+                    platformDetails
+                  );
+                  
+                  service.invoke('sos_triggered');
+                  
+                  if (Platform.isAndroid) {
+                    const intent = AndroidIntent(
+                      action: 'android.intent.action.MAIN',
+                      package: 'com.example.sentinel_mesh',
+                      componentName: 'com.example.sentinel_mesh.MainActivity',
+                      arguments: <String, dynamic>{'AUTO_RECORD': true},
+                      flags: <int>[268435456], // FLAG_ACTIVITY_NEW_TASK
+                    );
+                    await intent.launch();
+                  }
+                }
+              }
+            });
+          }
+        }
+      }
+    }
+  } catch (e) {
+    debugPrint("Setup BLE Listeners Error: $e");
   }
 }
