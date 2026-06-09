@@ -21,19 +21,10 @@ dependencies:
   # Notifications & Camera
   flutter_local_notifications: ^17.1.0
   camera: ^0.10.5
-
-  # UI & Utilities
-  google_fonts: ^6.2.1
-  url_launcher: ^6.2.6
-  shared_preferences: ^2.2.3
-  google_maps_flutter: ^2.14.2
-  http: ^1.6.0
-  google_generative_ai: ^0.4.7
-  flutter_polyline_points: ^3.1.0
-  flutter_blue_plus: ^1.34.4
-  flutter_background_service: ^5.0.5
-  android_intent_plus: ^6.0.0
-  flutter_dotenv: ^6.0.1
+  
+  # AI & ML
+  google_generative_ai: ^0.4.0
+  google_mlkit_pose_detection: ^0.11.0
 
 dev_dependencies:
   flutter_test:
@@ -42,5 +33,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - .env
+>>>>>>> 9c9d65644c0311b9c6667656d657a69ceff7773c

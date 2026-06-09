@@ -121,7 +121,6 @@ void setup() {
 
   Serial.println("\nConnected to WiFi");
   wifiReady = true;
-
   // --- GENERATE AND PRINT DEVICE ID ---
   String mac = WiFi.macAddress();
   mac.replace(":", "");
@@ -266,7 +265,6 @@ void loop() {
       Serial.println("Make sure Firebase rules are .read: true, .write: true");
     }
     // ---------------------------------------
-
     // ===== FALL/IMPACT DETECTION (only when NOT tracking) =====
     float totalAcc = sqrt(ax*ax + ay*ay + az*az);
 
