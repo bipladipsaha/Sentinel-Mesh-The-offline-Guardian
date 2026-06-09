@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:camera/camera.dart';
@@ -207,17 +208,20 @@ void main() async {
     debugPrint("⚠️ Camera Init Error: $e");
   }
   
+  // Load env variables
+  await dotenv.load(fileName: ".env");
+
   // 2. Initialize Firebase FIRST (critical for app functionality)
   try {
     await Firebase.initializeApp(
-      options: const FirebaseOptions(
-        apiKey: "AIzaSyB8EbdjZ3vcFDHrmP4VFpUb5sNpN1btdyg",
-        authDomain: "esp32iotproject-e9fe1.firebaseapp.com",
-        databaseURL: "https://esp32iotproject-e9fe1-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "esp32iotproject-e9fe1",
-        storageBucket: "esp32iotproject-e9fe1.firebasestorage.app",
-        messagingSenderId: "312298264533",
-        appId: "1:312298264533:android:27386d6b8444fb44038f5c",
+      options: FirebaseOptions(
+        apiKey: dotenv.env['FIREBASE_API_KEY'] ?? '',
+        authDomain: dotenv.env['FIREBASE_AUTH_DOMAIN'] ?? '',
+        databaseURL: dotenv.env['FIREBASE_DATABASE_URL'] ?? '',
+        projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? '',
+        storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'] ?? '',
+        messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '',
+        appId: dotenv.env['FIREBASE_APP_ID'] ?? '',
       ),
     );
   } catch (e) {
@@ -315,7 +319,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
 
     // 🔥 Firebase SOS listener — most reliable path
     _firebaseSosSub = FirebaseDatabase.instance
-        .ref('device001/status')
+        .ref('devices/device001/status')
         .onValue
         .listen((event) {
       final status = event.snapshot.value?.toString() ?? 'IDLE';
@@ -729,7 +733,7 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
 
     // 🔥 Firebase SOS listener
     _firebaseSosSub = FirebaseDatabase.instance
-        .ref('device001/status')
+        .ref('devices/device001/status')
         .onValue
         .listen((event) {
       final status = event.snapshot.value?.toString() ?? 'IDLE';
@@ -848,7 +852,7 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
       try {
         pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       } catch (_) {}
-      FirebaseDatabase.instance.ref('device001').update({
+      FirebaseDatabase.instance.ref('devices').child('device001').update({
         'status': 'ACTIVE',
         'lat': pos?.latitude,
         'lng': pos?.longitude,
@@ -857,7 +861,7 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
       // STOP recording
       final XFile video = await _cameraController!.stopVideoRecording();
       if (mounted) setState(() => _isRecording = false);
-      FirebaseDatabase.instance.ref('device001').update({'status': 'IDLE'});
+      FirebaseDatabase.instance.ref('devices').child('device001').update({'status': 'IDLE'});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Evidence saved: ${video.path}', style: const TextStyle(color: _Neon.textMain)),
@@ -1044,6 +1048,7 @@ class _ResponderScreenState extends State<ResponderScreen> with SingleTickerProv
   late AnimationController _radarPulse;
   late Animation<double> _radarAnim;
   GoogleMapController? _mapController;
+  StreamSubscription? _devicesSubscription;
 
   @override
   void initState() {
@@ -1063,7 +1068,7 @@ class _ResponderScreenState extends State<ResponderScreen> with SingleTickerProv
       debugPrint("Location error: $e");
     }
 
-    FirebaseDatabase.instance.ref('devices').onValue.listen((event) {
+    _devicesSubscription = FirebaseDatabase.instance.ref('devices').onValue.listen((event) {
       if (event.snapshot.value != null) {
         final Map<dynamic, dynamic> allDevices = event.snapshot.value as Map<dynamic, dynamic>;
         if (allDevices.isEmpty) return;
@@ -1163,6 +1168,7 @@ class _ResponderScreenState extends State<ResponderScreen> with SingleTickerProv
   @override
   void dispose() {
     _radarPulse.dispose();
+    _devicesSubscription?.cancel();
     _mapController?.dispose();
     super.dispose();
   }

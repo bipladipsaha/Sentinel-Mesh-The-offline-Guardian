@@ -1,10 +1,11 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AIService {
   // Provided Gemini API Key
-  static const String apiKey = 'AIzaSyAiO8GfyfWfO0BaSaiDsdQhw2LvRLqr_gU'; 
+  static String get apiKey => dotenv.env['GEMINI_API_KEY'] ?? 'YOUR_GEMINI_API_KEY'; 
   
-  static final GenerativeModel _model = GenerativeModel(
+  static GenerativeModel get _model => GenerativeModel(
     model: 'gemini-1.5-flash',
     apiKey: apiKey,
     generationConfig: GenerationConfig(
@@ -13,8 +14,8 @@ class AIService {
   );
 
   static Future<String> getEmergencyAdvice(String prompt) async {
-    if (apiKey == 'YOUR_GEMINI_API_KEY') {
-      return "Error: Gemini API Key is missing. Please add it to lib/services/ai_service.dart.";
+    if (apiKey == 'YOUR_GEMINI_API_KEY' || apiKey.isEmpty) {
+      return "Error: Gemini API Key is missing. Please add it to the .env file.";
     }
 
     try {

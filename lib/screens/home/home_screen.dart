@@ -32,15 +32,16 @@ class _HomeScreenState extends State<HomeScreen> {
     
     // If launched by native ESP signal, auto route to sender screen
     if (widget.autoRecord) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         // We assume the user's first device is the one that triggered it
         // Or we pass the device ID through the native intent. For now, default to first device.
-        _authService.currentUser?.uid.then((uid) async {
+        final uid = _authService.currentUser?.uid;
+        if (uid != null) {
           final user = await _authService.getUserDetails(uid);
-          if (user != null && user.espDevices.isNotEmpty) {
+          if (user != null && user.espDevices.isNotEmpty && mounted) {
             Navigator.push(context, MaterialPageRoute(builder: (_) => SenderScreen(autoRecord: true, deviceId: user.espDevices.first)));
           }
-        });
+        }
       });
     }
   }

@@ -85,12 +85,12 @@ class _MedicalSupportScreenState extends State<MedicalSupportScreen> {
       setState(() {
         _isLoading = false;
       });
-      print("Error fetching location/places: $e");
+      debugPrint("Error fetching location/places: $e");
     }
   }
 
   Future<void> _callAmbulance(String? phone) async {
-    final url = phone != null ? 'tel:$phone' : 'tel:911'; 
+    final url = phone != null ? 'tel:$phone' : 'tel:108'; // India ambulance
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url));
     }
@@ -110,8 +110,9 @@ class _MedicalSupportScreenState extends State<MedicalSupportScreen> {
       lat, lng
     );
     double distanceInKm = distanceInMeters / 1000;
-    int etaMinutes = (distanceInKm / 30 * 60).ceil();
-    return "${etaMinutes} min ETA";
+    // ~40 km/h urban average for emergency vehicles
+    int etaMinutes = (distanceInKm / 40 * 60).ceil();
+    return "~${etaMinutes} min ETA";
   }
 
   String _formatDistance(double lat, double lng) {
@@ -179,12 +180,12 @@ class _MedicalSupportScreenState extends State<MedicalSupportScreen> {
               ),
             ],
           ),
-          const Spacer(),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => _callAmbulance(null),
+                  onPressed: () => _callAmbulance(place['phone']),
                   icon: const Icon(Icons.phone, size: 16, color: Neon.textMain),
                   label: const Text('Call', style: TextStyle(color: Neon.textMain)),
                   style: OutlinedButton.styleFrom(
@@ -224,7 +225,7 @@ class _MedicalSupportScreenState extends State<MedicalSupportScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.local_hospital, color: Neon.hotRed),
-            onPressed: () => _callAmbulance(null),
+            onPressed: () => _callAmbulance(null), // Fallback to 108
           )
         ],
       ),

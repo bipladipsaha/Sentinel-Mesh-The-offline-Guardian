@@ -12,6 +12,7 @@
         rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="config.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <style>
@@ -1521,12 +1522,7 @@
         }
 
         // ══════════════════════════ FIREBASE ══════════════════════════
-        const firebaseConfig = {
-            apiKey: "AIzaSyCxXmq8B8T1qwufCsPgEyznS9YrLxuFNc4",
-            authDomain: "esp32iotproject-e9fe1.firebaseapp.com",
-            databaseURL: "https://esp32iotproject-e9fe1-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "esp32iotproject-e9fe1"
-        };
+        const firebaseConfig = config.firebase;
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         database.ref("devices").on("value", function (snapshot) {

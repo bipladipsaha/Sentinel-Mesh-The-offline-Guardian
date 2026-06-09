@@ -24,10 +24,7 @@ class _ClaimDeviceScreenState extends State<ClaimDeviceScreen> {
       return;
     }
 
-    String deviceId = _deviceIdController.text.trim().toUpperCase();
-    if (!deviceId.startsWith('SM-')) {
-      deviceId = 'SM-$deviceId';
-    }
+    String deviceId = _deviceIdController.text.trim();
 
     String deviceName = _deviceNameController.text.trim();
     if (deviceName.isEmpty) {

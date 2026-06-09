@@ -29,13 +29,9 @@ class _SenderScreenState extends State<SenderScreen> {
 
   Future<void> _initSenderPermissionsAndCamera() async {
     await [Permission.camera, Permission.microphone, Permission.location, Permission.bluetoothScan, Permission.bluetoothConnect].request();
-    _cameras = await availableCameras();
-    if (_cameras.isEmpty) return;
-    _cameraController = CameraController(_cameras[0], ResolutionPreset.medium, enableAudio: true);
-    await _cameraController!.initialize();
-    if (mounted) setState(() {});
 
-    _firebaseSubscription = FirebaseDatabase.instance.ref('device001').onValue.listen((event) {
+    // Setup Firebase listener first (independent of camera)
+    _firebaseSubscription = FirebaseDatabase.instance.ref('devices').child(widget.deviceId).onValue.listen((event) {
       if (!mounted) return;
       if (event.snapshot.value != null) {
         final data = Map<String, dynamic>.from(event.snapshot.value as Map);
@@ -46,6 +42,16 @@ class _SenderScreenState extends State<SenderScreen> {
         }
       }
     });
+
+    // Init camera (non-critical — SOS still works without it)
+    _cameras = await availableCameras();
+    if (_cameras.isNotEmpty) {
+      _cameraController = CameraController(_cameras[0], ResolutionPreset.medium, enableAudio: true);
+      await _cameraController!.initialize();
+      if (mounted) setState(() {});
+    } else {
+      debugPrint('No cameras available on this device');
+    }
 
     // Check if launched by ESP32 Background Service
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -76,7 +82,7 @@ class _SenderScreenState extends State<SenderScreen> {
   Future<void> _triggerSosAction() async {
     if (_isRecording) {
       await _stopRecording();
-      FirebaseDatabase.instance.ref('device001').update({'status': 'IDLE'});
+      FirebaseDatabase.instance.ref('devices').child(widget.deviceId).update({'status': 'IDLE'});
     } else {
       await _startRecording();
       // Fetch exact GPS to send to Responder map
@@ -86,11 +92,13 @@ class _SenderScreenState extends State<SenderScreen> {
       } catch (e) {
         debugPrint("Could not get location for SOS");
       }
-      FirebaseDatabase.instance.ref('device001').update({
-        'status': 'ACTIVE',
-        'lat': pos?.latitude,
-        'lng': pos?.longitude,
-      });
+      // Only include coordinates if GPS succeeded — don't overwrite valid data with nulls
+      final Map<String, dynamic> updateData = {'status': 'ACTIVE'};
+      if (pos != null) {
+        updateData['lat'] = pos.latitude;
+        updateData['lng'] = pos.longitude;
+      }
+      FirebaseDatabase.instance.ref('devices').child(widget.deviceId).update(updateData);
     }
   }
 

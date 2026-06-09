@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:geolocator/geolocator.dart';
@@ -17,6 +18,7 @@ class _LiveTrackerScreenState extends State<LiveTrackerScreen> {
   Position? _myLocation;
   List<Map<String, dynamic>> _nearbyEmergencies = [];
   final double _searchRadiusMeters = 5000; // 5km search radius
+  StreamSubscription? _firebaseSubscription;
 
   @override
   void initState() {
@@ -32,7 +34,7 @@ class _LiveTrackerScreenState extends State<LiveTrackerScreen> {
       debugPrint("Location error: $e");
     }
 
-    FirebaseDatabase.instance.ref('devices').onValue.listen((event) {
+    _firebaseSubscription = FirebaseDatabase.instance.ref('devices').onValue.listen((event) {
       if (!mounted || _myLocation == null) return;
 
       List<Map<String, dynamic>> activeEmergencies = [];
@@ -74,6 +76,12 @@ class _LiveTrackerScreenState extends State<LiveTrackerScreen> {
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
     }
+  }
+
+  @override
+  void dispose() {
+    _firebaseSubscription?.cancel();
+    super.dispose();
   }
 
   @override

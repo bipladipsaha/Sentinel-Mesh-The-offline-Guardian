@@ -36,63 +36,70 @@ class _ResponderScreenState extends State<ResponderScreen> {
   Future<void> _initGeofenceNetwork() async {
     await [Permission.location, Permission.notification].request();
     
+    // Initialize notifications plugin (required before .show() calls)
+    const AndroidInitializationSettings initAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings = InitializationSettings(android: initAndroid);
+    await flutterLocalNotificationsPlugin.initialize(initSettings);
+
     try {
       _myLocation = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
     } catch (e) {
       debugPrint("Location error: $e");
     }
 
-    String deviceId = 'device001';
-    var sub = FirebaseDatabase.instance.ref(deviceId).onValue.listen((event) {
-      if (!mounted) return;
+    // Listen to ALL claimed devices, not just a hardcoded one
+    for (String deviceId in widget.deviceIds) {
+      var sub = FirebaseDatabase.instance.ref('devices').child(deviceId).onValue.listen((event) {
+        if (!mounted) return;
 
-      if (event.snapshot.value != null) {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        String status = data['status'] ?? 'IDLE';
+        if (event.snapshot.value != null) {
+          final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+          String status = data['status'] ?? 'IDLE';
 
-        if (status == 'ACTIVE') {
-          double? vLat = data['lat'] != null ? (data['lat'] as num).toDouble() : null;
-          double? vLng = data['lng'] != null ? (data['lng'] as num).toDouble() : null;
+          if (status == 'ACTIVE') {
+            double? vLat = data['lat'] != null ? (data['lat'] as num).toDouble() : null;
+            double? vLng = data['lng'] != null ? (data['lng'] as num).toDouble() : null;
 
-          if (vLat != null && vLng != null && _myLocation != null) {
-            double distance = Geolocator.distanceBetween(_myLocation!.latitude, _myLocation!.longitude, vLat, vLng);
+            if (vLat != null && vLng != null && _myLocation != null) {
+              double distance = Geolocator.distanceBetween(_myLocation!.latitude, _myLocation!.longitude, vLat, vLng);
+              setState(() { 
+                _nearbyAlertActive = true; 
+                _distanceToVictim = distance; 
+                _activeDeviceId = deviceId; 
+                _victimLocation = LatLng(vLat, vLng);
+              });
+              
+              if (_mapController != null) {
+                _mapController!.animateCamera(CameraUpdate.newLatLngZoom(_victimLocation!, 15));
+              }
+
+              if (!_hasNotified) { 
+                _showEmergencyNotification(distance, deviceId); 
+                _hasNotified = true; 
+              }
+            } else {
+              setState(() { 
+                _nearbyAlertActive = true; 
+                _distanceToVictim = 0.0; 
+                _activeDeviceId = deviceId; 
+              });
+              if (!_hasNotified) { 
+                _showEmergencyNotification(0.0, deviceId); 
+                _hasNotified = true; 
+              }
+            }
+          } else if (status == 'IDLE' && _activeDeviceId == deviceId) {
             setState(() { 
-              _nearbyAlertActive = true; 
-              _distanceToVictim = distance; 
-              _activeDeviceId = deviceId; 
-              _victimLocation = LatLng(vLat, vLng);
+              _nearbyAlertActive = false; 
+              _hasNotified = false; 
+              _activeDeviceId = '';
+              _victimLocation = null;
             });
-            
-            if (_mapController != null) {
-              _mapController!.animateCamera(CameraUpdate.newLatLngZoom(_victimLocation!, 15));
-            }
-
-            if (!_hasNotified) { 
-              _showEmergencyNotification(distance, deviceId); 
-              _hasNotified = true; 
-            }
-          } else {
-            setState(() { 
-              _nearbyAlertActive = true; 
-              _distanceToVictim = 0.0; 
-              _activeDeviceId = deviceId; 
-            });
-            if (!_hasNotified) { 
-              _showEmergencyNotification(0.0, deviceId); 
-              _hasNotified = true; 
-            }
           }
-        } else if (status == 'IDLE' && _activeDeviceId == deviceId) {
-          setState(() { 
-            _nearbyAlertActive = false; 
-            _hasNotified = false; 
-            _activeDeviceId = '';
-            _victimLocation = null;
-          });
         }
-      }
-    });
-    _subscriptions.add(sub);
+      });
+      _subscriptions.add(sub);
+    }
   }
 
   Future<void> _showEmergencyNotification(double distance, String deviceId) async {
@@ -155,7 +162,7 @@ class _ResponderScreenState extends State<ResponderScreen> {
           onMapCreated: (controller) => _mapController = controller,
           myLocationEnabled: true,
           myLocationButtonEnabled: false,
-          mapType: MapType.dark,
+          mapType: MapType.normal,
         ),
         Align(
           alignment: Alignment.bottomCenter,

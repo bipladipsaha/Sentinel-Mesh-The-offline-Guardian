@@ -91,7 +91,7 @@ class _PoliceSupportScreenState extends State<PoliceSupportScreen> {
   }
   
   Future<void> _callEmergency(String? phone) async {
-    final url = phone != null ? 'tel:$phone' : 'tel:911'; 
+    final url = phone != null ? 'tel:$phone' : 'tel:100'; // India police
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url));
     }
@@ -111,8 +111,9 @@ class _PoliceSupportScreenState extends State<PoliceSupportScreen> {
       lat, lng
     );
     double distanceInKm = distanceInMeters / 1000;
-    int etaMinutes = (distanceInKm / 30 * 60).ceil();
-    return "${etaMinutes} min ETA";
+    // ~40 km/h urban average for emergency vehicles
+    int etaMinutes = (distanceInKm / 40 * 60).ceil();
+    return "~${etaMinutes} min ETA";
   }
 
   String _formatDistance(double lat, double lng) {
@@ -180,12 +181,12 @@ class _PoliceSupportScreenState extends State<PoliceSupportScreen> {
               ),
             ],
           ),
-          const Spacer(),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => _callEmergency(null),
+                  onPressed: () => _callEmergency(place['phone']),
                   icon: const Icon(Icons.phone, size: 16, color: Neon.textMain),
                   label: const Text('Call', style: TextStyle(color: Neon.textMain)),
                   style: OutlinedButton.styleFrom(
@@ -225,7 +226,7 @@ class _PoliceSupportScreenState extends State<PoliceSupportScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.phone, color: Neon.magenta),
-            onPressed: () => _callEmergency(null),
+            onPressed: () => _callEmergency(null), // Fallback to 100
           )
         ],
       ),

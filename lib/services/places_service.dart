@@ -50,10 +50,15 @@ class PlacesService {
                         element['tags']?['name:en'] ?? 
                         'Unknown $type location';
 
+          // Extract phone number from OSM tags if available
+          String? phone = element['tags']?['phone'] ??
+                          element['tags']?['contact:phone'];
+
           // Map to Google Places structure so the UI screens don't need any changes!
           mappedResults.add({
             'place_id': element['id'].toString(),
             'name': name,
+            'phone': phone,
             'geometry': {
               'location': {
                 'lat': elementLat,
