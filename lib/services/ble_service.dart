@@ -41,27 +41,12 @@ class BleService {
     _retryTimer?.cancel();
     _scanSubscription?.cancel();
 
-    try {
-      if (await FlutterBluePlus.isSupported == false) {
-        debugPrint("Bluetooth not supported");
-        return;
-      }
-
-      _setState(BleConnectionState.scanning);
-
-      // Stop any existing scan first
-      try { await FlutterBluePlus.stopScan(); } catch (_) {}
-
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
-
-      _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
-        for (ScanResult r in results) {
-          if (r.device.platformName == 'Sentinel_ESP' || r.device.advName == 'Sentinel_ESP') {
-            FlutterBluePlus.stopScan();
-            _scanSubscription?.cancel();
-            _connectToDevice(r.device, onSosTriggered, onStateChanged);
-            return;
-          }
+    _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
+      for (ScanResult r in results) {
+        if (r.device.platformName.contains('Sentinel') || r.device.advName.contains('Sentinel')) {
+          FlutterBluePlus.stopScan();
+          _connectToDevice(r.device, onSosTriggered, onStateChanged);
+          break;
         }
       });
 

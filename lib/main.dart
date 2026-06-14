@@ -70,11 +70,8 @@ Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceIns
     if (_isConnecting || _connectedDevice != null) return;
     
     for (ScanResult r in results) {
-      if (r.device.platformName == 'Sentinel_ESP' || r.device.advName == 'Sentinel_ESP' || 
-          r.device.platformName == 'Sentinel' || r.device.advName == 'Sentinel') {
-        _isConnecting = true;
-        try { await FlutterBluePlus.stopScan(); } catch (_) {}
-        service.invoke('ble_state', {'state': 'connecting'});
+      if (r.device.platformName.contains('Sentinel') || r.device.advName.contains('Sentinel')) {
+        FlutterBluePlus.stopScan();
         
         try {
            await r.device.connect(autoConnect: false, timeout: const Duration(seconds: 10));
@@ -93,59 +90,19 @@ Future<void> _initBackgroundBle(FlutterLocalNotificationsPlugin flnp, ServiceIns
            });
         } catch (e) {
           debugPrint("BLE Connect error: $e");
-          _connectedDevice = null;
-          service.invoke('ble_state', {'state': 'disconnected'});
-          // Cooldown to prevent instant loop from cached stream results
-          await Future.delayed(const Duration(seconds: 5));
-          _isConnecting = false;
-        }
-        break; // Only process the first matched device
+          Future.delayed(const Duration(seconds: 5), () => _backgroundBleScan(flnp));
+        });
+        return; // Exit function since we found it
       }
     }
   });
 
-  FlutterBluePlus.isScanning.listen((isScanning) {
-    if (!isScanning && !_isConnecting && _connectedDevice == null) {
-      service.invoke('ble_state', {'state': 'disconnected'});
-    }
-  });
-
-  Timer.periodic(const Duration(seconds: 15), (timer) async {
-    if (!_autoScanEnabled || _connectedDevice != null || _isConnecting) return;
-    
-    try {
-      var connectedDevices = await FlutterBluePlus.connectedSystemDevices;
-      if (connectedDevices.any((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP' || d.platformName == 'Sentinel' || d.advName == 'Sentinel')) {
-        _connectedDevice = connectedDevices.firstWhere((d) => d.platformName == 'Sentinel_ESP' || d.advName == 'Sentinel_ESP' || d.platformName == 'Sentinel' || d.advName == 'Sentinel');
-        service.invoke('ble_state', {'state': 'connected'});
-        _isConnecting = false;
-        await _setupBleListeners(_connectedDevice!, service, flutterLocalNotificationsPlugin);
-        return;
-      }
-    } catch (_) {}
-
+  // If scan times out and we didn't connect, restart the scan
+  Future.delayed(const Duration(seconds: 16), () {
     if (FlutterBluePlus.isScanningNow == false) {
-      try {
-        if (await FlutterBluePlus.isSupported == false) return;
-        service.invoke('ble_state', {'state': 'scanning'});
-        await FlutterBluePlus.startScan(timeout: const Duration(seconds: 8));
-      } catch (e) {
-        debugPrint("⚠️ Background BLE Scan Error: $e");
-      }
+      _backgroundBleScan(flnp);
     }
   });
-}
-
-Future<void> _triggerScan(ServiceInstance service) async {
-  if (_connectedDevice != null || _isConnecting || FlutterBluePlus.isScanningNow) return;
-  try {
-    if (await FlutterBluePlus.isSupported == true) {
-      service.invoke('ble_state', {'state': 'scanning'});
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 8));
-    }
-  } catch (e) {
-    service.invoke('ble_state', {'state': 'disconnected'});
-  }
 }
 
 Future<void> initializeService() async {
@@ -239,6 +196,16 @@ void main() async {
     const InitializationSettings initSettings = InitializationSettings(android: initSettingsAndroid);
     await flutterLocalNotificationsPlugin.initialize(initSettings);
     
+    // Request essential permissions including Bluetooth
+    await [
+      Permission.camera,
+      Permission.microphone,
+      Permission.location,
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.notification
+    ].request();
+
     // Explicitly ask for notification permission on startup (Android 13+)
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
@@ -251,7 +218,24 @@ void main() async {
   try {
     await initializeService();
   } catch (e) {
-    debugPrint("⚠️ Background Service Init Error: $e");
+    debugPrint("⚠️ Notification/Service Init Error: $e");
+  }
+  
+  // 3. Initialize Firebase with correct google-services.json keys
+  try {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: "YOUR_FIREBASE_API_KEY",
+        authDomain: "esp32iotproject-e9fe1.firebaseapp.com",
+        databaseURL: "https://esp32iotproject-e9fe1-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "esp32iotproject-e9fe1",
+        storageBucket: "esp32iotproject-e9fe1.firebasestorage.app",
+        messagingSenderId: "312298264533",
+        appId: "1:312298264533:android:27386d6b8444fb44038f5c",
+      ),
+    );
+  } catch (e) {
+    debugPrint("⚠️ Firebase Init Error: $e");
   }
   
   runApp(const SentinelApp());
@@ -843,7 +827,13 @@ class _SenderScreenState extends State<SenderScreen> with SingleTickerProviderSt
   }
 
   Future<void> _initCamera() async {
-    await [Permission.camera, Permission.microphone, Permission.location].request();
+    await [
+      Permission.camera,
+      Permission.microphone,
+      Permission.location,
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect
+    ].request();
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) return;

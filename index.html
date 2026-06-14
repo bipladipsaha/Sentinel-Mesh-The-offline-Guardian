@@ -2,10 +2,10 @@
 <html lang="en">
 
 <head>
-    <title>Sentinel-Mesh | Women Safety Monitoring Dashboard</title>
+    <title>Sentinel-Mesh | Safety Monitoring Dashboard</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Sentinel-Mesh — Real-time IoT Women Safety Monitoring System Dashboard">
+    <meta name="description" content="Sentinel-Mesh — Real-time IoT Safety Monitoring System Dashboard">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
@@ -214,12 +214,10 @@
         /* MAIN LAYOUT */
         .main-content {
             padding: 24px 28px;
-            overflow-y: auto;
-            height: calc(100vh - 60px);
+            overflow-y: visible;
         }
 
         .main-content.with-banner {
-            height: calc(100vh - 60px - 42px);
         }
 
         .dashboard-grid {
@@ -962,6 +960,354 @@
             color: var(--text-primary);
         }
 
+        /* ═══════════════════════════════════════════════════════════════
+           AI SITUATION UNDERSTANDING & EMERGENCY VALIDATION SECTION
+           ═══════════════════════════════════════════════════════════════ */
+
+        .ai-section {
+            background: var(--bg-page);
+            padding: 32px 28px 40px;
+        }
+
+        .ai-section-inner {
+            max-width: 1440px;
+            margin: 0 auto;
+        }
+
+        .ai-section-header {
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .ai-section-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 14px;
+            border-radius: 20px;
+            background: var(--blue-light);
+            border: 1px solid var(--blue-border);
+            color: var(--blue);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            font-family: var(--font-mono);
+        }
+
+        .ai-section-badge .badge-pulse {
+            width: 7px;
+            height: 7px;
+            background: var(--blue);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .ai-section-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .ai-section-title .gradient-text {
+            color: var(--blue);
+        }
+
+        .ai-section-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            max-width: 640px;
+            line-height: 1.6;
+        }
+
+        .ai-dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .ai-glass-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ai-glass-card:hover {
+            box-shadow: var(--shadow-md);
+        }
+
+        .ai-glass-card::before {
+            display: none;
+        }
+
+        .ai-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .ai-card-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ai-card-title .title-icon {
+            font-size: 14px;
+        }
+
+        .ai-card-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 5px 14px;
+            border-radius: 20px;
+        }
+
+        .ai-card-status.active {
+            color: var(--green);
+            background: var(--green-light);
+            border: 1px solid var(--green-border);
+        }
+
+        .ai-card-status .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse 2s infinite;
+        }
+
+        .ai-data-rows {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .ai-data-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .ai-data-row:last-child {
+            border-bottom: none;
+        }
+
+        .ai-data-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 140px;
+        }
+
+        .ai-data-value {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            text-align: right;
+        }
+
+        .ai-data-value.highlight {
+            color: var(--red);
+            font-weight: 600;
+        }
+
+        .ai-data-value.success {
+            color: var(--green);
+            font-weight: 600;
+        }
+
+        .ai-data-value.warning {
+            color: var(--amber);
+            font-weight: 600;
+        }
+
+        .ai-data-value.info {
+            color: var(--blue);
+            font-weight: 600;
+        }
+
+        .ai-confidence-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .ai-confidence-track {
+            width: 100px;
+            height: 8px;
+            background: #E2E8F0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .ai-confidence-fill {
+            height: 100%;
+            width: 92%;
+            background: linear-gradient(90deg, var(--blue), #2563EB);
+            border-radius: 4px;
+        }
+
+        .ai-confidence-pct {
+            font-family: var(--font-mono);
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--blue);
+        }
+
+        .ai-priority-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        .ai-priority-badge.high {
+            color: var(--amber);
+            background: var(--amber-light);
+            border: 1px solid #FDE68A;
+        }
+
+        .ai-data-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            text-align: right;
+        }
+
+        .ai-data-list li {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-primary);
+            padding: 2px 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .ai-data-list li::before {
+            content: '';
+            width: 5px;
+            height: 5px;
+            background: var(--blue);
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .ai-bandwidth-highlight {
+            font-family: var(--font-mono);
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--green);
+        }
+
+        .ai-transmission-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .ai-stat-box {
+            background: var(--bg-sidebar);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            text-align: center;
+        }
+
+        .ai-stat-label {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .ai-stat-value {
+            font-family: var(--font-mono);
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .ai-stat-value.accent {
+            color: var(--blue);
+        }
+
+        .ai-stat-value.green {
+            color: var(--green);
+        }
+
+        .ai-scan-line {
+            display: none;
+        }
+
+        .ai-report-timestamp {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: right;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-light);
+        }
+
+        .ai-report-timestamp .time-value {
+            color: var(--text-secondary);
+        }
+
+        @media(max-width:1024px) {
+            .ai-dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media(max-width:768px) {
+            .ai-section {
+                padding: 24px 16px;
+            }
+            .ai-glass-card {
+                padding: 16px;
+            }
+        }
+
+
+
+
         /* RESPONSIVE */
         @media(max-width:1024px) {
             .dashboard-grid {
@@ -1019,7 +1365,7 @@
             <div class="logo-icon">🛡</div>
             <div class="header-title">
                 <span class="brand">Sentinel-Mesh</span>
-                <span class="sub">— Women Safety Monitoring Dashboard</span>
+                <span class="sub">— Safety Monitoring Dashboard</span>
             </div>
         </div>
         <div class="header-right">
@@ -1138,6 +1484,139 @@
         </div>
     </main>
 
+    <!-- ═══════════════════════════════════════════════════════════════
+         AI SITUATION UNDERSTANDING & EMERGENCY VALIDATION SECTION
+         ═══════════════════════════════════════════════════════════════ -->
+    <section class="ai-section" id="aiSection">
+        <div class="ai-section-inner">
+
+            <!-- Section Header -->
+            <div class="ai-section-header">
+                <div class="ai-section-badge">
+                    <span class="badge-pulse"></span>
+                    AI Engine Active
+                </div>
+                <h2 class="ai-section-title">
+                    <span class="gradient-text">AI Situation Understanding</span><br>
+                    & Emergency Validation
+                </h2>
+                <p class="ai-section-subtitle">
+                    On-device artificial intelligence processes emergency situations locally on the smartphone, generating structured intelligence reports for rapid alert delivery.
+                </p>
+            </div>
+
+            <!-- Intelligence Dashboard Cards -->
+            <div class="ai-dashboard-grid">
+                <!-- LEFT: Emergency Intelligence Report -->
+                <div class="ai-glass-card">
+                    <div class="ai-scan-line"></div>
+                    <div class="ai-card-header">
+                        <span class="ai-card-title">
+                            <span class="title-icon">📋</span>
+                            Emergency Intelligence Report
+                        </span>
+                        <span class="ai-card-status active">
+                            <span class="status-dot"></span>
+                            Processing
+                        </span>
+                    </div>
+                    <div class="ai-data-rows">
+                        <div class="ai-data-row">
+                            <span class="ai-data-label">Emergency Type</span>
+                            <span class="ai-data-value highlight">Physical Assault</span>
+                        </div>
+                        <div class="ai-data-row">
+                            <span class="ai-data-label">Confidence</span>
+                            <div class="ai-confidence-bar">
+                                <div class="ai-confidence-track">
+                                    <div class="ai-confidence-fill"></div>
+                                </div>
+                                <span class="ai-confidence-pct">92%</span>
+                            </div>
+                        </div>
+                        <div class="ai-data-row">
+                            <span class="ai-data-label">Victim Status</span>
+                            <ul class="ai-data-list">
+                                <li>Standing</li>
+                                <li>Distressed</li>
+                                <li>Calling for Help</li>
+                            </ul>
+                        </div>
+                        <div class="ai-data-row">
+                            <span class="ai-data-label">Threat Assessment</span>
+                            <ul class="ai-data-list">
+                                <li>One Male Individual Detected</li>
+                                <li>Aggressive Movement Observed</li>
+                            </ul>
+                        </div>
+                        <div class="ai-data-row">
+                            <span class="ai-data-label">Location</span>
+                            <span class="ai-data-value info">22.680521, 88.342197</span>
+                        </div>
+                        <div class="ai-data-row">
+                            <span class="ai-data-label">Priority</span>
+                            <span class="ai-priority-badge high">⚠ HIGH</span>
+                        </div>
+                    </div>
+                    <div class="ai-report-timestamp">
+                        Report Generated: <span class="time-value" id="aiReportTime">—</span>
+                    </div>
+                </div>
+
+                <!-- RIGHT: Transmission & Data Report -->
+                <div class="ai-glass-card">
+                    <div class="ai-card-header">
+                        <span class="ai-card-title">
+                            <span class="title-icon">📡</span>
+                            Transmission Intelligence
+                        </span>
+                        <span class="ai-card-status active">
+                            <span class="status-dot"></span>
+                            Linked
+                        </span>
+                    </div>
+                    <div class="ai-data-rows">
+                        <div class="ai-data-row">
+                            <span class="ai-data-label">Transmission Mode</span>
+                            <span class="ai-data-value info">LoRa Mesh + GSM Backup</span>
+                        </div>
+                        <div class="ai-data-row">
+                            <span class="ai-data-label">Data Sent</span>
+                            <span class="ai-data-value success">3.2 KB</span>
+                        </div>
+                        <div class="ai-data-row">
+                            <span class="ai-data-label">Est. Video Size</span>
+                            <span class="ai-data-value" style="color:#f87171;">52.4 MB</span>
+                        </div>
+                        <div class="ai-data-row">
+                            <span class="ai-data-label">Bandwidth Reduction</span>
+                            <span class="ai-bandwidth-highlight">99.94%</span>
+                        </div>
+                    </div>
+                    <div class="ai-transmission-grid">
+                        <div class="ai-stat-box">
+                            <div class="ai-stat-label">LoRa Signal</div>
+                            <div class="ai-stat-value accent">Strong</div>
+                        </div>
+                        <div class="ai-stat-box">
+                            <div class="ai-stat-label">GSM Fallback</div>
+                            <div class="ai-stat-value green">Ready</div>
+                        </div>
+                        <div class="ai-stat-box">
+                            <div class="ai-stat-label">Mesh Nodes</div>
+                            <div class="ai-stat-value accent">4 Active</div>
+                        </div>
+                        <div class="ai-stat-box">
+                            <div class="ai-stat-label">Response Time</div>
+                            <div class="ai-stat-value green">&lt; 2s</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
     <!-- TRACKING VIEW -->
     <div class="tracking-view" id="trackingView">
         <div class="tracking-banner banner-normal" id="trackBanner">🟢 SYSTEM NORMAL — ALL CLEAR</div>
@@ -1235,6 +1714,7 @@
         </div>
     </div>
 
+    <script src="config.js"></script>
     <script>
         // ══════════════════════════ STATE ══════════════════════════
         let currentView = 'dashboard';
@@ -1522,7 +2002,12 @@
         }
 
         // ══════════════════════════ FIREBASE ══════════════════════════
-        const firebaseConfig = config.firebase;
+        const firebaseConfig = {
+            apiKey: config.FIREBASE_API_KEY,
+            authDomain: "esp32iotproject-e9fe1.firebaseapp.com",
+            databaseURL: "https://esp32iotproject-e9fe1-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "esp32iotproject-e9fe1"
+        };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         database.ref("devices").on("value", function (snapshot) {
@@ -1538,6 +2023,19 @@
             processUpdate(data);
             if (initialLoad) initialLoad = false;
         });
+
+        // ══════════════════════════ AI SECTION ANIMATIONS ══════════════════════════
+        
+        // Update AI report timestamp
+        function updateAiReportTime() {
+            const el = document.getElementById('aiReportTime');
+            if (el) {
+                const now = new Date();
+                el.innerText = now.toLocaleTimeString('en-US', { hour12: true }) + ' — ' + now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            }
+        }
+        setInterval(updateAiReportTime, 1000);
+        updateAiReportTime();
 
         // ══════════════════════════ INIT MAP ON LOAD ══════════════════════════
         window.addEventListener('load', function () { initMainMap(); });

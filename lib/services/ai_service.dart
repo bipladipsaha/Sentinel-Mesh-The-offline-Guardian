@@ -3,7 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AIService {
   // Provided Gemini API Key
-  static String get apiKey => dotenv.env['GEMINI_API_KEY'] ?? 'YOUR_GEMINI_API_KEY'; 
+  static const String apiKey = 'YOUR_GEMINI_API_KEY'; 
   
   static GenerativeModel get _model => GenerativeModel(
     model: 'gemini-1.5-flash',

@@ -46,7 +46,10 @@ app.*.map.json
 /android/build/
 /build_locked/
 
-# Sensitive Config Files
+# ───────────────────────────────────────
+# SECRETS (DO NOT COMMIT!)
+# ───────────────────────────────────────
 .env
 config.js
-android/app/google-services.json
+
+.vercel
